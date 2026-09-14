@@ -112,62 +112,6 @@ namespace BoboBayArchipelago
             }
         }
     }
-
-    [HarmonyPatch(typeof(CompetitionManager), "EndEvent")]
-    public static class CompetitionResultDumpPatch
-    {
-        [HarmonyPostfix]
-        public static void Postfix(CompetitionManager __instance)
-        {
-            var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
-            foreach (var f in typeof(CompetitionManager).GetFields(flags))
-            {
-                if (f.Name.IndexOf("win", StringComparison.OrdinalIgnoreCase) >= 0
-                || f.Name.IndexOf("place", StringComparison.OrdinalIgnoreCase) >= 0
-                || f.Name.IndexOf("rank", StringComparison.OrdinalIgnoreCase) >= 0
-                || f.Name.IndexOf("result", StringComparison.OrdinalIgnoreCase) >= 0
-                || f.Name.IndexOf("standing", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    object val = f.GetValue(__instance);
-                    Plugin.Log?.LogInfo($"[APDebug] CompetitionManager.{f.Name} : {f.FieldType.Name} = {val}");
-                }
-            }
-
-            // BoboControllers is documented directly on CompetitionManager — dump each
-            // controller's Bobo to see if placement/win data lives per-participant instead.
-            var controllersField = typeof(CompetitionManager).GetField("BoboControllers", flags)
-                                ?? typeof(CompetitionManager).GetField("_boboControllers", flags);
-            var controllers = controllersField?.GetValue(__instance) as System.Collections.IEnumerable;
-            if (controllers == null)
-            {
-                Plugin.Log?.LogWarning("[APDebug] Could not find BoboControllers field on CompetitionManager.");
-                return;
-            }
-
-            foreach (var controller in controllers)
-            {
-                if (controller == null) continue;
-                var bobo = controller.GetType().GetProperty("Bobo", flags)?.GetValue(controller)
-                        ?? controller.GetType().GetField("Bobo", flags)?.GetValue(controller);
-                if (bobo == null) continue;
-
-                var isPlayers = bobo.GetType().GetProperty("IsPlayers", flags)?.GetValue(bobo)
-                            ?? bobo.GetType().GetField("IsPlayers", flags)?.GetValue(bobo);
-
-                Plugin.Log?.LogInfo($"[APDebug] Controller bobo: {bobo}, IsPlayers={isPlayers}");
-                foreach (var f in bobo.GetType().GetFields(flags))
-                {
-                    if (f.Name.IndexOf("win", StringComparison.OrdinalIgnoreCase) >= 0
-                    || f.Name.IndexOf("place", StringComparison.OrdinalIgnoreCase) >= 0
-                    || f.Name.IndexOf("finish", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        Plugin.Log?.LogInfo($"[APDebug]   FIELD {f.Name} : {f.FieldType.Name} = {f.GetValue(bobo)}");
-                    }
-                }
-            }
-        }
-    }
     
     [HarmonyPatch(typeof(BoboData), "NewFullDay")]
     public static class UnlimitedSnacksPatch
@@ -264,7 +208,7 @@ namespace BoboBayArchipelago
             var trav = Traverse.Create(__instance);
             var currentCompSO = trav.Field("_currentCompetitionSO").GetValue();
             if (currentCompSO == null) { Plugin.Log?.LogInfo("[APDebug] _currentCompetitionSO is null"); return; }
-            // Log the SO's Unity asset name — this is your unique identifier
+            // Log the SO's Unity asset name
             Plugin.Log?.LogInfo($"[APDebug] Competition asset name: '{currentCompSO}'");
             // Drill into the 'so' field inside CurrentCompetitionSO
             var innerSO = Traverse.Create(currentCompSO).Field("so").GetValue();
@@ -308,12 +252,8 @@ namespace BoboBayArchipelago
         public static ConfigEntry<int> BoboTicketsRequiredEntry;
         public static ConfigEntry<int> ProgressiveCompetitionsReceivedEntry;
         private static bool _foodModPending = false;
-
-        /// <summary>
-        /// Exposes typed configuration entries to the ModManager / Archipelago UI tab.
-        /// Reads by reflection to allow UI generation without tight component coupling.
-        /// </summary>
-        public static ConfigEntryBase[] ModManagerSettings;
+        
+        public static ConfigEntryBase[] BoboManagerSettings;
 
         private void Awake()
         {
@@ -332,7 +272,7 @@ namespace BoboBayArchipelago
             SceneManager.sceneUnloaded += OnSceneUnloaded;
 
             // Expose settings array for dynamic UI generation
-            ModManagerSettings = new ConfigEntryBase[]
+            BoboManagerSettings = new ConfigEntryBase[]
             {
                 ServerAddressEntry,
                 SlotNameEntry,

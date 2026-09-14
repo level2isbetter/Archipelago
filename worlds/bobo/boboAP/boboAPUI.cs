@@ -6,9 +6,7 @@ using UnityEngine.UI;
 
 namespace BoboBayArchipelago
 {
-    /// <summary>
     /// Injects an "Archipelago" tab into BobosWorld.UISettings using live game clones.
-    /// </summary>
     [HarmonyPatch(typeof(BobosWorld.UISettings), "OnEnable")]
     public static class ArchipelagoUI_OnEnable
     {
@@ -385,9 +383,4 @@ namespace BoboBayArchipelago
             return false;
         }
     }
-
-    /// <summary>
-    /// Placeholder state container for Archipelago credentials and network status.
-    /// Replace these static properties with calls to your main Archipelago client logic.
-    /// </summary>
 }
