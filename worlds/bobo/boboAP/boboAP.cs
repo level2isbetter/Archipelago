@@ -130,6 +130,10 @@ namespace BoboBayArchipelago
         [HarmonyPostfix]
         public static void Postfix(CompetitionManager __instance)
         {
+            var trav = Traverse.Create(__instance);
+            var currentCompSO = trav.Field("_currentCompetitionSO").GetValue();
+            if (currentCompSO == null) { Plugin.Log?.LogInfo("[APDebug] _currentCompetitionSO is null"); return; }
+
             // calculate location ID based on competition SO
             // example: AP loc ID = 20000 + CompID
             var innerSO = Traverse.Create(__instance)
@@ -139,6 +143,15 @@ namespace BoboBayArchipelago
 
             if (innerSO == null) return;
             
+            Plugin.Log?.LogInfo($"[APDebug] Competition asset name: '{currentCompSO}'");
+            Plugin.Log?.LogInfo($"[APDebug] Inner SO: '{innerSO}' (type: {innerSO.GetType().Name})");
+            foreach (var f in innerSO.GetType().GetFields(
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
+            {
+                try { Plugin.Log?.LogInfo($"[APDebug]   {f.Name} = {f.GetValue(innerSO)}"); }
+                catch { }
+            }
+
             string soName = (string)typeof(UnityEngine.Object)
                 .GetProperty("name")
                 .GetValue(innerSO);
@@ -185,50 +198,19 @@ namespace BoboBayArchipelago
             { "Woovy_Race_D", 20050124 },
             { "BigJam_Race_D", 20050125 },
             { "Beefy_Brawl_D", 20050126 },
-            { "ChannelIt_Race_D", 20050127 },
-            { "Pow_Brawl_D", 20050128 },
-            { "Muckula_Race_D", 20050129 },
-            { "MiniMatch_Brawl_D", 20050130 },
-            { "YouJumpIClimb_Race_D", 20050131 },
-            { "CrawfishCookie_Brawl_D", 20050132 },
-            { "BoyAlphard_Race_D", 20050133 },
-            { "Pumpkick_Brawl_D", 20050134 },
-            { "Drippy_Brawl_D", 20050135 },
-            { "TakeMeOut_Brawl_D", 20050136 }
+            { "Pow_Brawl_D", 20050127 },
+            { "Muckula_Race_D", 20050128 },
+            { "MiniMatch_Brawl_D", 20050129 },
+            { "YouJumpIClimb_Race_D", 20050130 },
+            { "CrawfishCookie_Brawl_D", 20050131 },
+            { "BoyAlphard_Race_D", 20050132 },
+            { "Pumpkick_Brawl_D", 20050133 },
+            { "Drippy_Brawl_D", 20050134 },
+            { "TakeMeOut_Brawl_D", 20050135 }
             // to add more here
         };
     }
     
-    [HarmonyPatch(typeof(BobosWorld.CompetitionManager), "EndEvent")]
-    public static class CompetitionDebugPatch
-    {
-        [HarmonyPostfix]
-        public static void Postfix(BobosWorld.CompetitionManager __instance)
-        {
-            var trav = Traverse.Create(__instance);
-            var currentCompSO = trav.Field("_currentCompetitionSO").GetValue();
-            if (currentCompSO == null) { Plugin.Log?.LogInfo("[APDebug] _currentCompetitionSO is null"); return; }
-            // Log the SO's Unity asset name
-            Plugin.Log?.LogInfo($"[APDebug] Competition asset name: '{currentCompSO}'");
-            // Drill into the 'so' field inside CurrentCompetitionSO
-            var innerSO = Traverse.Create(currentCompSO).Field("so").GetValue();
-            if (innerSO != null)
-            {
-                Plugin.Log?.LogInfo($"[APDebug] Inner SO: '{innerSO}' (type: {innerSO.GetType().Name})");
-                // Dump all fields of the inner SO
-                foreach (var f in innerSO.GetType().GetFields(
-                    System.Reflection.BindingFlags.Public |
-                    System.Reflection.BindingFlags.NonPublic |
-                    System.Reflection.BindingFlags.Instance |
-                    System.Reflection.BindingFlags.FlattenHierarchy))
-                {
-                    try { Plugin.Log?.LogInfo($"[APDebug]   {f.Name} = {f.GetValue(innerSO)}"); }
-                    catch { }
-                }
-            }
-        }
-    }
-
     [HarmonyPatch(typeof(GardenBoboAITree))]
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
     public class Plugin : BaseUnityPlugin
@@ -251,6 +233,7 @@ namespace BoboBayArchipelago
         public static ConfigEntry<int> BoboTicketsReceivedEntry;
         public static ConfigEntry<int> BoboTicketsRequiredEntry;
         public static ConfigEntry<int> ProgressiveCompetitionsReceivedEntry;
+        public static ConfigEntry<string> LastSeedEntry;
         private static bool _foodModPending = false;
         
         public static ConfigEntryBase[] BoboManagerSettings;
@@ -268,6 +251,7 @@ namespace BoboBayArchipelago
             AutoConnectEntry = Config.Bind("Archipelago", "AutoConnect", false, "Automatically attempt connection on startup.");
             ProgressiveCompetitionsReceivedEntry = Config.Bind("Archipelago", "ProgressiveCompetitionsReceived", 0,
                 "Internal: how many Progressive Competitions items received so far.");
+            LastSeedEntry = Config.Bind("Archipelago", "LastSeed", "", "Internal: tracks the last connected seed, to auto-reset progress counters on a new seed.");
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
 
@@ -286,12 +270,6 @@ namespace BoboBayArchipelago
             // Hook static handlers to scene events (survives MonoBehaviour destruction)
             SceneManager.sceneLoaded += OnSceneLoaded;
 
-            ItemsGrantedIndexEntry = Config.Bind("Archipelago", "ItemsGrantedIndex", 0,
-                "Internal: count of AP items already granted, to avoid re-granting them after a reconnect.");
-            DRankUnlockedEntry = Config.Bind("Archipelago", "DRankUnlocked", false,
-                "Internal: whether the Archipelago D-rank progression item has been received.");
-            BoboTicketsReceivedEntry = Config.Bind("Archipelago", "BoboTicketsReceived", 0,
-                "Internal: how many bobo tickets received so far.");
             BoboTicketsRequiredEntry = Config.Bind("Archipelago", "BoboTicketsRequiredEntry", 3,
                 "Internal: how many bobo tickets unlock the goal competition.");
 
@@ -363,6 +341,10 @@ namespace BoboBayArchipelago
 
     public static class ArchipelagoItemHandler
     {
+        public static ConfigEntry<int> BoboTicketsReceivedEntry;
+        public static ConfigEntry<int> ProgressiveCompetitionsReceivedEntry;
+        public static ConfigEntry<bool> DRankUnlockedEntry;
+        public static ConfigEntry<int> ItemsGrantedIndexEntry;
         public const long DRankUnlockItemId = 20050050;
         public const long ProgressiveCompetitionsId = 20050051;
         public const long BoboTicketId = 20050000;
@@ -372,6 +354,24 @@ namespace BoboBayArchipelago
 
         public static Dictionary<string, int> CompetitionUnlockThresholds = new Dictionary<string, int>();
         public static int ProgressiveCompetitionsReceived => Plugin.ProgressiveCompetitionsReceivedEntry?.Value ?? 0;
+
+        public static void BindProgressEntriesForSeed(string seed)
+        {
+            string safeSeed = new string(seed.Where(c => char.IsLetterOrDigit(c)).ToArray());
+            if (string.IsNullOrEmpty(safeSeed)) safeSeed = "unknown";
+            string section = "Progress_" + safeSeed;
+
+            BoboTicketsReceivedEntry = Plugin.ConfigFile.Bind(section, "BoboTicketsReceived", 0,
+                "Progress for this specific seed — how many Bobo Tickets received.");
+            ProgressiveCompetitionsReceivedEntry = Plugin.ConfigFile.Bind(section, "ProgressiveCompetitionsReceived", 0,
+                "Progress for this specific seed — how many Progressive Competitions received.");
+            DRankUnlockedEntry = Plugin.ConfigFile.Bind(section, "DRankUnlocked", false,
+                "Progress for this specific seed — legacy D-rank unlock flag.");
+            ItemsGrantedIndexEntry = Plugin.ConfigFile.Bind(section, "ItemsGrantedIndex", 0,
+                "Progress for this specific seed — count of AP items already granted.");
+
+            Plugin.Log?.LogInfo($"[Archipelago] Bound progress entries for seed section '{section}'.");
+        }
 
         public static void UnlockDRank()
         {
@@ -684,6 +684,25 @@ namespace BoboBayArchipelago
             return result;
         }
 
+        private static void DumpSeedIdentifierCandidates(LoginSuccessful success)
+        {
+            var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+            void DumpMembers(object obj, string label)
+            {
+                if (obj == null) { Plugin.Log?.LogWarning($"[APDebug] {label} is null."); return; }
+                foreach (var p in obj.GetType().GetProperties(flags))
+                {
+                    if (p.Name.IndexOf("seed", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    try { Plugin.Log?.LogInfo($"[APDebug] {label}.{p.Name} = {p.GetValue(obj)}"); }
+                    catch (Exception ex) { Plugin.Log?.LogInfo($"[APDebug] {label}.{p.Name} threw: {ex.Message}"); }
+                }
+            }
+
+            DumpMembers(success, "LoginSuccessful");
+            DumpMembers(_session?.RoomState, "RoomState");
+        }
+
         public static bool IsConnected { get; private set; } = false;
         public static string StatusMessage { get; private set; } = "Disconnected";
 
@@ -713,6 +732,9 @@ namespace BoboBayArchipelago
                         IsConnected = true;
                         UpdateStatus($"Connected to {host}");
 
+                        string currentSeed = _session.RoomState?.Seed ?? "";
+                        ArchipelagoItemHandler.BindProgressEntriesForSeed(currentSeed);
+
                         if (success.SlotData.TryGetValue("bobo_tickets_required", out object ticketsObj))
                         {
                             ArchipelagoItemHandler.SetBoboTicketsRequired(Convert.ToInt32(ticketsObj));
@@ -731,11 +753,6 @@ namespace BoboBayArchipelago
                         {
                             ArchipelagoItemHandler.CompetitionUnlockThresholds = ParseThresholds(thresholdsObj);
                             Plugin.Log?.LogInfo($"[Archipelago] Loaded {ArchipelagoItemHandler.CompetitionUnlockThresholds.Count} competition unlock threshold(s).");
-                        }
-                        if (success.SlotData.TryGetValue("seed_name", out object seedObj) == false)
-                        {
-                            // Some server versions expose it on RoomState instead of SlotData
-                            Plugin.Log?.LogInfo($"[APDebug] Room seed: {_session.RoomState?.Seed}");
                         }
                     }
                     else
