@@ -172,7 +172,7 @@ namespace BoboBayArchipelago
         public static readonly Dictionary<string, long> CompetitionLocationIDs = new Dictionary<string, long>
         {
             { "BabysFirstSteps_Race_E", 20050100 },
-            { "LetsTryClimbing_Race_E", 20050101 },
+            { "Let'sTryClimbing_Race_E", 20050101 },
             { "ICanClimbThat_Race_E", 20050102 },
             { "UpToTheMoon_Race_E", 20050103 },
             { "TheNewMe_Race_E", 20050104 },
