@@ -1,32 +1,21 @@
-# So the goal here is to have a catalog of all the items in your game
-# To correctly generate a games items they need to be bundled in a list
-# A list in programming terms is anything in square brackets [] to put it simply
-
-# When a list is described its described as a list of x where x is the type of variable within it
-# IE: ["apple", "pear", "grape"] is a list of strings (anything inside "" OR '' are considered strings)
-
-# Logging = output. How you'll figure out whats going wrong
 import logging
 
-# Built in AP imports
 from BaseClasses import Item, ItemClassification
 
-# These come from the other files in this example. If you want to see the source ctrl + click the name
-# You can also do that ctrl + click for any functions to see what they do
-from .Types import ItemData, ChapterType, APSkeletonItem, chapter_type_to_name
+from .Types import ItemData, ChapterType, BoboBayItem, chapter_type_to_name
 from .Locations import get_total_locations
 from typing import List, Dict, TYPE_CHECKING
 from .CompetitionUnlocks import get_competition_unlock_order
+from .CompetitionUnlocks import get_saga_unlock_order
 
-# This is just making sure nothing gets confused dw about what its doing exactly
 if TYPE_CHECKING:
-    from . import APSkeletonWorld
+    from . import BoboWorld
 
 # If you're curious about the -> List[Item] that is a syntax to make sure you return the correct variable type
 # In this instance we're saying we only want to return a list of items
 # You'll see a bunch of other examples of this in other functions
 # It's main purpose is to protect yourself from yourself
-def create_itempool(world: "APSkeletonWorld") -> List[Item]:
+def create_itempool(world: "BoboWorld") -> List[Item]:
     itempool: List[Item] = []
 
     # Add all unique items (excluding Victory, which is placed on Beat Big Jam)
@@ -43,6 +32,11 @@ def create_itempool(world: "APSkeletonWorld") -> List[Item]:
     max_batch = max(thresholds.values()) if thresholds else 0
     itempool += create_multiple_items(world, "Progressive Competitions", max_batch, ItemClassification.progression)
 
+    # progressive sagas logic
+    saga_thresholds = get_saga_unlock_order(world)
+    max_saga_batch = max(saga_thresholds.values()) if saga_thresholds else 0
+    itempool += create_multiple_items(world, "Progressive Sagas", max_saga_batch, ItemClassification.progression)
+
     # Place victory at the final location
     victory = create_item(world, "Victory")
     world.multiworld.get_location("Beat Big Jam", world.player).place_locked_item(victory)
@@ -55,23 +49,23 @@ def create_itempool(world: "APSkeletonWorld") -> List[Item]:
     return itempool
 
 # This is a generic function to create a singular item
-def create_item(world: "APSkeletonWorld", name: str) -> Item:
+def create_item(world: "BoboWorld", name: str) -> Item:
     data = item_table[name]
-    return APSkeletonItem(name, data.classification, data.ap_code, world.player)
+    return BoboBayItem(name, data.classification, data.ap_code, world.player)
 
 # Another generic function. For creating a bunch of items at once!
-def create_multiple_items(world: "APSkeletonWorld", name: str, count: int,
+def create_multiple_items(world: "BoboWorld", name: str, count: int,
                           item_type: ItemClassification = ItemClassification.progression) -> List[Item]:
     data = item_table[name]
     itemlist: List[Item] = []
 
     for i in range(count):
-        itemlist += [APSkeletonItem(name, item_type, data.ap_code, world.player)]
+        itemlist += [BoboBayItem(name, item_type, data.ap_code, world.player)]
 
     return itemlist
 
 # Finally, where junk items are created
-def create_junk_items(world: "APSkeletonWorld", count: int) -> List[Item]:
+def create_junk_items(world: "BoboWorld", count: int) -> List[Item]:
     junk_pool: List[Item] = []
     junk_names = list(junk_weights.keys())
     weights = list(junk_weights.values())
@@ -84,35 +78,84 @@ def create_junk_items(world: "APSkeletonWorld", count: int) -> List[Item]:
 
 # Items from Bobo Bay
 bobo_items = {
+    # Progression
+    "Bobo Ticket":           ItemData(20050000, ItemClassification.progression),
+    "Progressive Competitions": ItemData(20050001, ItemClassification.progression),
+    "Progressive Sagas":     ItemData(20050002, ItemClassification.progression),
+    "D-Rank License":        ItemData(20050003, ItemClassification.progression),
+
+    # Trait Items
+    "Balance Pole":       ItemData(20050400, ItemClassification.useful),
+    "Skimboard":          ItemData(20050401, ItemClassification.useful),
+    "Steel Chair":        ItemData(20050402, ItemClassification.useful),
+    "Trainer Cube":       ItemData(20050403, ItemClassification.useful),
+    "Plyo Box":           ItemData(20050404, ItemClassification.useful),
+    "Lockpick":           ItemData(20050405, ItemClassification.useful),
+    "Resistance Band":    ItemData(20050406, ItemClassification.useful),
+    "Fake ID":            ItemData(20050407, ItemClassification.useful),
+    "Teapot":             ItemData(20050408, ItemClassification.useful),
+    "Glider":             ItemData(20050409, ItemClassification.useful),
+    "Gun":                ItemData(20050410, ItemClassification.useful),
+    "Slot Machine":       ItemData(20050411, ItemClassification.useful),
+    "Dumbbell":           ItemData(20050412, ItemClassification.useful),
+    "Fishing Rod":        ItemData(20050413, ItemClassification.useful),
+    "Shovel":             ItemData(20050414, ItemClassification.useful),
+    "Jump Rope":          ItemData(20050415, ItemClassification.useful),
+    "Skillet":            ItemData(20050416, ItemClassification.useful),
+    "Trident":            ItemData(20050417, ItemClassification.useful),
+    "Lumi Star":          ItemData(20050418, ItemClassification.useful),
+    "Sticky Hand":        ItemData(20050419, ItemClassification.useful),
+    "Pile of Sand":       ItemData(20050420, ItemClassification.useful),
+    "Teleporter":         ItemData(20050421, ItemClassification.useful),
+    "Funnel":             ItemData(20050422, ItemClassification.useful),
+    "Clipboard":          ItemData(20050423, ItemClassification.useful),
+    "Boxing Gloves":      ItemData(20050424, ItemClassification.useful),
+    "Ice Axes":           ItemData(20050425, ItemClassification.useful),
+    "Good Luck Charm":    ItemData(20050426, ItemClassification.useful),
+    "Mood Stabilizer":    ItemData(20050427, ItemClassification.useful),
+    "Banana Peel":        ItemData(20050428, ItemClassification.useful),
+    "Flint and Steel":    ItemData(20050429, ItemClassification.useful),
+    "Skateboard":         ItemData(20050430, ItemClassification.useful),
+    "Sword":              ItemData(20050431, ItemClassification.useful),
+    "Inhaler":            ItemData(20050432, ItemClassification.useful),
+
+    # Other Items (beds, etc)
+    "Bed (Cute, Pink)":           ItemData(20050500, ItemClassification.useful),
+    "Round Tent, Red":            ItemData(20050501, ItemClassification.useful),
+    "Basic Sleeping Bag, Black":  ItemData(20050502, ItemClassification.useful),
+    "Grave":                      ItemData(20050503, ItemClassification.useful),
+    "Race Car, Blue":             ItemData(20050504, ItemClassification.useful),
+    "Race Car, Red":              ItemData(20050505, ItemClassification.useful),
+    "Round Tent, Yellow":         ItemData(20050506, ItemClassification.useful),
+    "Cat Bed, Purple":            ItemData(20050507, ItemClassification.useful),
+    "Bed (Cute, Red)":            ItemData(20050508, ItemClassification.useful),
+    "Crib, Blue":                 ItemData(20050509, ItemClassification.useful),
+    "Round Tent, Blue":           ItemData(20050510, ItemClassification.useful),
+    "Round Tent, Black":          ItemData(20050511, ItemClassification.useful),
+    "Medicine":                   ItemData(20050512, ItemClassification.useful),
+    "Basic Sleeping Bag, Purple": ItemData(20050513, ItemClassification.useful),
+    "Basic Sleeping Bag, White":  ItemData(20050514, ItemClassification.useful),
+    "Basic Sleeping Bag, Blue":   ItemData(20050515, ItemClassification.useful),
+    "Basic Sleeping Bag, Red":    ItemData(20050516, ItemClassification.useful),
+    "Basic Sleeping Bag, Yellow": ItemData(20050517, ItemClassification.useful),
+    "Basic Sleeping Bag, Green":  ItemData(20050518, ItemClassification.useful),
+    "Bed (Cute, Black)":          ItemData(20050519, ItemClassification.useful),
+    "Lily Pad Bed":               ItemData(20050520, ItemClassification.useful),
+    "Trash Bed":                  ItemData(20050521, ItemClassification.useful),
+    "Raft Bed":                   ItemData(20050522, ItemClassification.useful),
+    "Race Car, Green":            ItemData(20050523, ItemClassification.useful),
+    "Cat Bed, Blue":              ItemData(20050524, ItemClassification.useful),
+    "Bed (Crib, Pink)":           ItemData(20050525, ItemClassification.useful),
+    "Race Car, Black":            ItemData(20050526, ItemClassification.useful),
+    
     # Snacks & Consumables
-    "Leftover Pizza":        ItemData(20050001, ItemClassification.filler),
-    "Palmwelon":             ItemData(20050002, ItemClassification.filler),
-    "Gumball":               ItemData(20050003, ItemClassification.filler),
-    "Goldenana":             ItemData(20050004, ItemClassification.filler),
-    "Bunny Cracker":         ItemData(20050005, ItemClassification.useful),
-    "Skyberry":              ItemData(20050006, ItemClassification.filler),
-    "Crackthrust Hype":      ItemData(20050007, ItemClassification.useful),
+    "Bunny Cracker":         ItemData(20050050, ItemClassification.useful),
+    "Crackthrust Hype":      ItemData(20050051, ItemClassification.useful),
 
     # Accessories & Wearables
-    "Business Glasses":      ItemData(20050008, ItemClassification.useful),
-    "Hot Top Medal":         ItemData(20050009, ItemClassification.useful),
-    "Sassy Sunglasses":      ItemData(20050010, ItemClassification.useful),
-    "Sneakers":              ItemData(20050011, ItemClassification.useful),
-    "Gear Star Medal":       ItemData(20050012, ItemClassification.useful),
-    "Cool Helmet":           ItemData(20050013, ItemClassification.useful),
-    "Dash Classic Medal":    ItemData(20050014, ItemClassification.useful),
-    "Aviators":              ItemData(20050015, ItemClassification.useful),
-    "Knit Hat":              ItemData(20050016, ItemClassification.useful),
-    "Top Hat":               ItemData(20050017, ItemClassification.useful),
     
     # Toys
-    "Bunny Stuffed Animal":  ItemData(20050018, ItemClassification.useful),
-
-    # Progression
-    "D-Rank License":        ItemData(20050050, ItemClassification.progression),
-    "Progressive Competitions": ItemData(20050051, ItemClassification.progression),
-    "Bobo Ticket":           ItemData(20050000, ItemClassification.progression),
-
+    "Bunny Stuffed Animal":  ItemData(20050052, ItemClassification.useful),
 
     # Goal
     "Victory":               ItemData(20050099, ItemClassification.progression),
@@ -120,15 +163,27 @@ bobo_items = {
 
 # Items used to fill empty slots
 junk_items = {
-    "150 money": ItemData(20050020, ItemClassification.filler, 0),
-    "Gumball (Junk)":        ItemData(20050021, ItemClassification.filler, 0),
-    "Skyberry (Junk)":       ItemData(20050022, ItemClassification.filler, 0),
+    "75 money":                    ItemData(20050090, ItemClassification.filler, 0),
+    "Gumball (Concerned Eyes)":    ItemData(20050091, ItemClassification.filler, 0),
+    "Banana Cream Pie":            ItemData(20050092, ItemClassification.filler, 0),
+    "Key Lime Pie":                ItemData(20050093, ItemClassification.filler, 0),
+    "Blueberry Pie":               ItemData(20050094, ItemClassification.filler, 0),
+    "Pecan Pie":                   ItemData(20050095, ItemClassification.filler, 0),
+    "Thick Pie":                   ItemData(20050096, ItemClassification.filler, 0),
+    "Thick Pie with Love":         ItemData(20050097, ItemClassification.filler, 0),
+    "Baked Cake":                  ItemData(20050098, ItemClassification.filler, 0),
 }
 
 junk_weights = {
-    "150 money": 50,
-    "Gumball (Junk)":        10,
-    "Skyberry (Junk)":       40,
+    "75 money": 50,
+    "Gumball (Concerned Eyes)": 5,
+    "Banana Cream Pie":       5,
+    "Key Lime Pie":           5,
+    "Blueberry Pie":          5,
+    "Pecan Pie":              5,
+    "Thick Pie":              19,
+    "Thick Pie with Love":    1,
+    "Baked Cake":             5,
 }
 
 item_table = {

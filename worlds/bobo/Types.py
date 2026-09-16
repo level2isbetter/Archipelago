@@ -7,7 +7,7 @@ class BoboLocation(Location):
     game: str = "Bobo Bay"
 
 
-class BoboItem(Item):
+class BoboBayItem(Item):
     game: str = "Bobo Bay"
 
 
@@ -32,7 +32,3 @@ class ChapterType(IntEnum):
 chapter_type_to_name = {
     ChapterType.COMPETITIONS: "Competitions",
 }
-
-# Aliases in case other files still refer to APSkeleton
-APSkeletonItem = BoboItem
-APSkeletonLocation = BoboLocation

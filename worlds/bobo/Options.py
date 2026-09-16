@@ -3,8 +3,6 @@ from dataclasses import dataclass
 from worlds.AutoWorld import PerGameCommonOptions
 from Options import Choice, OptionGroup, Toggle, Range
 
-# If youve ever gone to an options page and seen how sometimes options are grouped
-# This is that
 def create_option_groups() -> List[OptionGroup]:
     option_group_list: List[OptionGroup] = []
     for name, options in ap_skeleton_option_groups.items():
@@ -52,16 +50,26 @@ class CompetitionsPerUnlock(Range):
     range_end = 15
     default = 4
 
+class SagasPerUnlock(Range):
+    """
+    How many sagas unlock each time a Progressive Sagas item is received.
+    """
+    display_name = "Sagas Per Unlock"
+    range_start = 1
+    range_end = 3
+    default = 1
+
 @dataclass
-class APSkeletonOptions(PerGameCommonOptions):
+class BoboOptions(PerGameCommonOptions):
     ExtraLocations:              ExtraLocations
     BoboTicketsRequired:         BoboTicketsRequired
     SnackMultiplier:            SnackMultiplier
     UnlimitedSnacks:            UnlimitedSnacks
     CompetitionsPerUnlock:        CompetitionsPerUnlock
+    SagasPerUnlock:               SagasPerUnlock
 
 # This is where you organize your options
 # Its entirely up to you how you want to organize it
 ap_skeleton_option_groups: Dict[str, List[Any]] = {
-    "General Options": [BoboTicketsRequired, SnackMultiplier, UnlimitedSnacks, ExtraLocations, CompetitionsPerUnlock],
+    "General Options": [BoboTicketsRequired, SnackMultiplier, UnlimitedSnacks, ExtraLocations, CompetitionsPerUnlock, SagasPerUnlock],
 }

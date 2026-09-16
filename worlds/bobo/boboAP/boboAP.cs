@@ -18,23 +18,24 @@ namespace BoboBayArchipelago
     [HarmonyPatch(typeof(CompetitionSO), "Unlocked")]
     public static class CompetitionUnlockPatch
     {
-        
-        // goals will go here
-        private static readonly HashSet<string> GoalCompetitionAssetNames = new HashSet<string>
-        {
-            "BigJam_Race_D",
-        };
 
         [HarmonyPostfix]
         public static void Postfix(CompetitionSO __instance, ref bool __result)
         {
             if (__instance == null) return;
 
-            if (GoalCompetitionAssetNames.Contains(__instance.name))
+            if (ArchipelagoItemHandler.GoalCompetitionAssetNames.Contains(__instance.name))
             {
                 __result = ArchipelagoItemHandler.BoboTicketsReceived >= ArchipelagoItemHandler.BoboTicketsRequired;
                 return;
             }
+
+            if (__instance.isSaga && __instance.saga != null)
+            {
+                __result = !__instance.saga.locked;
+                return;
+            }
+
             if (ArchipelagoItemHandler.CompetitionUnlockThresholds.TryGetValue(__instance.name, out int required))
             {
                 __result = ArchipelagoItemHandler.ProgressiveCompetitionsReceived >= required;
@@ -43,6 +44,10 @@ namespace BoboBayArchipelago
 
             if (__instance.rank == Grade.E){ __result = true; }
             else if (__instance.rank == Grade.D){ __result = ArchipelagoItemHandler.DRankUnlocked; }
+            else if (__instance.rank == Grade.C){ __result = ArchipelagoItemHandler.CRankUnlocked; }
+            else if (__instance.rank == Grade.B){ __result = ArchipelagoItemHandler.BRankUnlocked; }
+            else if (__instance.rank == Grade.A){ __result = ArchipelagoItemHandler.ARankUnlocked; }
+            else if (__instance.rank == Grade.S){ __result = ArchipelagoItemHandler.SRankUnlocked; }
         }
     }
 
@@ -57,7 +62,17 @@ namespace BoboBayArchipelago
                 if (competition == null) continue;
 
                 bool forceAvailable;
-                if (ArchipelagoItemHandler.CompetitionUnlockThresholds.TryGetValue(competition.name, out int required))
+
+                if (ArchipelagoItemHandler.GoalCompetitionAssetNames.Contains(competition.name))
+                {
+                    forceAvailable = ArchipelagoItemHandler.BoboTicketsReceived >= ArchipelagoItemHandler.BoboTicketsRequired;
+                }
+                else
+                if (competition.isSaga && competition.saga != null)
+                {
+                    forceAvailable = !competition.saga.locked;
+                }
+                else if (ArchipelagoItemHandler.CompetitionUnlockThresholds.TryGetValue(competition.name, out int required))
                 {
                     forceAvailable = ArchipelagoItemHandler.ProgressiveCompetitionsReceived >= required;
                 }
@@ -96,6 +111,107 @@ namespace BoboBayArchipelago
                     if (!competition.seasons.Contains(season))
                         competition.seasons.Add(season);
                 }
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(CompetitionOrganizer), "SetTodaysCompetitions")]
+    public static class SagaAvailabilityPatch
+    {
+        [HarmonyPrefix]
+        public static void Prefix()
+        {
+            foreach (var saga in Resources.FindObjectsOfTypeAll<CompetitionSeriesSO_Saga>())
+            {
+                if (saga == null) continue;
+                if (ArchipelagoItemHandler.SagaUnlockThresholds.TryGetValue(saga.name, out int required))
+                {
+                    saga.locked = ArchipelagoItemHandler.ProgressiveSagasReceived < required;
+                }
+                else 
+                {
+                    saga.locked = true;
+                }
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(GardenManager), "Awake")]
+    public static class NormalCompetitionDumpPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            try
+            {
+                var all = Resources.FindObjectsOfTypeAll<CompetitionSO>();
+                var standalone = all.Where(c => c != null && !c.isSaga).ToList();
+
+                Plugin.Log?.LogInfo($"[APDebug] Found {all.Length} total CompetitionSO, {standalone.Count} standalone (non-saga).");
+
+                foreach (var comp in standalone.OrderBy(c => c.rank).ThenBy(c => c.name))
+                {
+                    string title = Traverse.Create(comp).Field("title").GetValue<string>();
+                    bool known = CompetitionLocations.All.ContainsKey(comp.name);
+                    string status = known ? $"OK -> {CompetitionLocations.All[comp.name]}" : "MISSING";
+
+                    Plugin.Log?.LogInfo($"[APDebug] comp: {comp.name} (rank={comp.rank}, type={comp.type}, title='{title}') [{status}]");
+                }
+
+                // Flag anything in the dictionary that no longer matches a real competition
+                // (stale entries, or the duplicate-key situation from before)
+                var realNames = standalone.Select(c => c.name).ToHashSet();
+                foreach (var key in CompetitionLocations.All.Keys)
+                {
+                    if (!realNames.Contains(key))
+                        Plugin.Log?.LogWarning($"[APDebug] Dictionary entry '{key}' does not match any live standalone competition.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log?.LogError($"[APDebug] NormalCompetitionDumpPatch threw: {ex}");
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(CompetitionSO), "Unlocked")]
+    public static class SagaUnlockDiagnosticPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(CompetitionSO __instance, ref bool __result)
+        {
+            if (__instance == null || !__instance.isSaga) return;
+            Plugin.Log?.LogInfo($"[APDebug] Saga comp '{__instance.name}': saga='{__instance.saga?.name}', saga.locked={__instance.saga?.locked}, Unlocked()={__result}");
+        }
+    }
+
+    [HarmonyPatch(typeof(GardenManager), "Awake")]
+    public static class SagaRosterDumpPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            try
+            {
+                var sagas = Resources.FindObjectsOfTypeAll<CompetitionSeriesSO_Saga>();
+                Plugin.Log?.LogInfo($"[APDebug] Found {sagas.Length} CompetitionSeriesSO_Saga instance(s).");
+
+                foreach (var saga in sagas)
+                {
+                    if (saga == null) continue;
+                    string title = Traverse.Create(saga).Field("title").GetValue<string>();
+                    Plugin.Log?.LogInfo($"[APDebug] SAGA '{saga.name}' (title='{title}', locked={saga.locked})");
+
+                    foreach (var comp in saga.competitions ?? new List<CompetitionSO>())
+                    {
+                        string compTitle = Traverse.Create(comp).Field("title").GetValue<string>();
+                        Plugin.Log?.LogInfo($"[APDebug]   comp: {comp.name} (rank={comp.rank}, title='{compTitle}')");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log?.LogError($"[APDebug] SagaRosterDumpPatch threw: {ex}");
             }
         }
     }
@@ -156,7 +272,7 @@ namespace BoboBayArchipelago
                 .GetProperty("name")
                 .GetValue(innerSO);
             
-            if (!CompetitionLocationIDs.TryGetValue(soName, out long locationID))
+            if (!CompetitionLocations.All.TryGetValue(soName, out long locationID))
             {
                 Plugin.Log?.LogWarning($"[AP] No location ID mapped for competition: '{soName}'");
                 return;
@@ -169,46 +285,6 @@ namespace BoboBayArchipelago
                 ArchipelagoManager.SendGoalComplete();
             }
         }
-        public static readonly Dictionary<string, long> CompetitionLocationIDs = new Dictionary<string, long>
-        {
-            { "BabysFirstSteps_Race_E", 20050100 },
-            { "Let'sTryClimbing_Race_E", 20050101 },
-            { "ICanClimbThat_Race_E", 20050102 },
-            { "UpToTheMoon_Race_E", 20050103 },
-            { "TheNewMe_Race_E", 20050104 },
-            { "CometOClock_Race_E", 20050105 },
-            { "SwimLessons_Race_E", 20050106 },
-            { "StillCrawling_Race_E", 20050107 },
-            { "BiggerWaterTrain_Race_E", 20050108 },
-            { "LittleWaterTrain_Race_E", 20050109 },
-            { "Qwench_Race_E", 20050110 },
-            { "InTheDrink_Brawl_E", 20050111 },
-            { "PunchTheBaby_Brawl_E", 20050112 },
-            { "BeamWithAView_Race_D", 20050113 },
-            { "WalkAlongHigh_Race_D", 20050114 },
-            { "ChannelIt_Race_D", 20050115 },
-            { "TestTheJump_Race_D", 20050116 },
-            { "PunchIt_Race_D", 20050117 },
-            { "SplishBlock_Race_D", 20050118 },
-            { "LittleLongerNow_Race_D", 20050119 },
-            { "UndertheScramble_Brawl_D", 20050120 },
-            { "Double Kee Laps_Race_D", 20050121 },
-            { "VerticalDoggyPaddle_Race_D", 20050122 },
-            { "WaveyBaby_Race_D", 20050123 },
-            { "Woovy_Race_D", 20050124 },
-            { "BigJam_Race_D", 20050125 },
-            { "Beefy_Brawl_D", 20050126 },
-            { "Pow_Brawl_D", 20050127 },
-            { "Muckula_Race_D", 20050128 },
-            { "MiniMatch_Brawl_D", 20050129 },
-            { "YouJumpIClimb_Race_D", 20050130 },
-            { "CrawfishCookie_Brawl_D", 20050131 },
-            { "BoyAlphard_Race_D", 20050132 },
-            { "Pumpkick_Brawl_D", 20050133 },
-            { "Drippy_Brawl_D", 20050134 },
-            { "TakeMeOut_Brawl_D", 20050135 }
-            // to add more here
-        };
     }
     
     [HarmonyPatch(typeof(GardenBoboAITree))]
@@ -228,11 +304,7 @@ namespace BoboBayArchipelago
         public static ConfigEntry<string> SlotNameEntry;
         public static ConfigEntry<string> PasswordEntry;
         public static ConfigEntry<bool> AutoConnectEntry;
-        public static ConfigEntry<int> ItemsGrantedIndexEntry;
-        public static ConfigEntry<bool> DRankUnlockedEntry;
-        public static ConfigEntry<int> BoboTicketsReceivedEntry;
         public static ConfigEntry<int> BoboTicketsRequiredEntry;
-        public static ConfigEntry<int> ProgressiveCompetitionsReceivedEntry;
         public static ConfigEntry<string> LastSeedEntry;
         private static bool _foodModPending = false;
         
@@ -249,7 +321,7 @@ namespace BoboBayArchipelago
             SlotNameEntry = Config.Bind("Archipelago", "SlotName", "Player", "Slot name registered in the Archipelago multiworld.");
             PasswordEntry = Config.Bind("Archipelago", "Password", "", "Password for the room (if required).");
             AutoConnectEntry = Config.Bind("Archipelago", "AutoConnect", false, "Automatically attempt connection on startup.");
-            ProgressiveCompetitionsReceivedEntry = Config.Bind("Archipelago", "ProgressiveCompetitionsReceived", 0,
+            ArchipelagoItemHandler.ProgressiveCompetitionsReceivedEntry = Config.Bind("Archipelago", "ProgressiveCompetitionsReceived", 0,
                 "Internal: how many Progressive Competitions items received so far.");
             LastSeedEntry = Config.Bind("Archipelago", "LastSeed", "", "Internal: tracks the last connected seed, to auto-reset progress counters on a new seed.");
             SceneManager.sceneLoaded += OnSceneLoaded;
@@ -343,18 +415,41 @@ namespace BoboBayArchipelago
     {
         public static ConfigEntry<int> BoboTicketsReceivedEntry;
         public static ConfigEntry<int> ProgressiveCompetitionsReceivedEntry;
-        public static ConfigEntry<bool> DRankUnlockedEntry;
+        public static ConfigEntry<int> ProgressiveSagasReceivedEntry;
+
+        public static ConfigEntry<bool> DRankUnlockedEntry, 
+            CRankUnlockedEntry, 
+            BRankUnlockedEntry, 
+            ARankUnlockedEntry, 
+            SRankUnlockedEntry;
         public static ConfigEntry<int> ItemsGrantedIndexEntry;
         public const long DRankUnlockItemId = 20050050;
-        public const long ProgressiveCompetitionsId = 20050051;
         public const long BoboTicketId = 20050000;
-        public static bool DRankUnlocked => Plugin.DRankUnlockedEntry?.Value ?? false;
-        public static int BoboTicketsReceived => Plugin.BoboTicketsReceivedEntry?.Value ?? 0;
+        public const long ProgressiveCompetitionsId = 20050001;
+        public const long ProgressiveSagasId = 20050002;
+        public static bool DRankUnlocked => DRankUnlockedEntry?.Value ?? false;
+        public static bool CRankUnlocked => CRankUnlockedEntry?.Value ?? false;
+        public static bool BRankUnlocked => BRankUnlockedEntry?.Value ?? false;
+        public static bool ARankUnlocked => ARankUnlockedEntry?.Value ?? false;
+        public static bool SRankUnlocked => SRankUnlockedEntry?.Value ?? false;
+        public static int BoboTicketsReceived => BoboTicketsReceivedEntry?.Value ?? 0;
         public static int BoboTicketsRequired => Plugin.BoboTicketsRequiredEntry?.Value ?? 3;
+        public static float CurrentSnackMultiplier { get; private set; } = 1f;
+        public static bool UnlimitedSnacksEnabled { get; private set; } = false;
+        private static readonly int BaseMinStat = Common.DEFAULT_MINSTATUPDATE;
+        private static readonly int BaseMaxStat = Common.DEFAULT_MAXSTATUPDATE;
+        public static Dictionary<string, int> SagaUnlockThresholds = new Dictionary<string, int>();
+        public static int ProgressiveSagasReceived => ProgressiveSagasReceivedEntry?.Value ?? 0;
 
         public static Dictionary<string, int> CompetitionUnlockThresholds = new Dictionary<string, int>();
-        public static int ProgressiveCompetitionsReceived => Plugin.ProgressiveCompetitionsReceivedEntry?.Value ?? 0;
-
+        public static int ProgressiveCompetitionsReceived => ArchipelagoItemHandler.ProgressiveCompetitionsReceivedEntry?.Value ?? 0;
+        
+        // goals go here!
+        public static readonly HashSet<string> GoalCompetitionAssetNames = new HashSet<string>
+        {
+            "BigJam_Race_D",
+        };
+        
         public static void BindProgressEntriesForSeed(string seed)
         {
             string safeSeed = new string(seed.Where(c => char.IsLetterOrDigit(c)).ToArray());
@@ -365,36 +460,28 @@ namespace BoboBayArchipelago
                 "Progress for this specific seed — how many Bobo Tickets received.");
             ProgressiveCompetitionsReceivedEntry = Plugin.ConfigFile.Bind(section, "ProgressiveCompetitionsReceived", 0,
                 "Progress for this specific seed — how many Progressive Competitions received.");
-            DRankUnlockedEntry = Plugin.ConfigFile.Bind(section, "DRankUnlocked", false,
-                "Progress for this specific seed — legacy D-rank unlock flag.");
+            ProgressiveSagasReceivedEntry = Plugin.ConfigFile.Bind(section, "ProgressiveSagasReceived", 0,
+                "Progress for this specific seed — how many Progressive Sagas received.");
             ItemsGrantedIndexEntry = Plugin.ConfigFile.Bind(section, "ItemsGrantedIndex", 0,
                 "Progress for this specific seed — count of AP items already granted.");
 
             Plugin.Log?.LogInfo($"[Archipelago] Bound progress entries for seed section '{section}'.");
         }
 
-        public static void UnlockDRank()
-        {
-            if (Plugin.DRankUnlockedEntry != null)
-                Plugin.DRankUnlockedEntry.Value = true;
-
-            Plugin.Log?.LogInfo("[Archipelago] D-rank competitions unlocked.");
-        }
-
         public static void GrantProgressiveCompetitions()
         {
             // want to convert from unlocking competitions by rank
             // to unlocking sets of competitions to stagger the progression
-            if (Plugin.ProgressiveCompetitionsReceivedEntry != null)
-            Plugin.ProgressiveCompetitionsReceivedEntry.Value++;
+            if (ArchipelagoItemHandler.ProgressiveCompetitionsReceivedEntry != null)
+            ArchipelagoItemHandler.ProgressiveCompetitionsReceivedEntry.Value++;
 
             Plugin.Log?.LogInfo($"[Archipelago] Progressive Competitions received ({ProgressiveCompetitionsReceived}).");
 
         }
         public static void GrantBoboTicket()
         {
-            if (Plugin.BoboTicketsReceivedEntry != null)
-                Plugin.BoboTicketsReceivedEntry.Value++;
+            if (BoboTicketsReceivedEntry != null)
+                BoboTicketsReceivedEntry.Value++;
 
             Plugin.Log?.LogInfo($"[Archipelago] Bobo Ticket received ({BoboTicketsReceived}/{BoboTicketsRequired}).");
         }
@@ -404,11 +491,25 @@ namespace BoboBayArchipelago
                 Plugin.BoboTicketsRequiredEntry.Value = required;
         }
 
-        public static float CurrentSnackMultiplier { get; private set; } = 1f;
-        public static bool UnlimitedSnacksEnabled { get; private set; } = false;
-        private static readonly int BaseMinStat = Common.DEFAULT_MINSTATUPDATE;
-        private static readonly int BaseMaxStat = Common.DEFAULT_MAXSTATUPDATE;
+        public static void ForceRefreshCompetitions()
+        {
+            var organizer = UnityEngine.Object.FindObjectOfType(typeof(BobosWorld.CompetitionOrganizer)) as BobosWorld.CompetitionOrganizer;
+            if (organizer == null) return; // not in-game yet (e.g. connected from main menu) — nothing to refresh
 
+            var garden = BobosWorld.Garden.Current;
+            if (garden == null) return;
+
+            var flags = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance;
+            var dateTimeSOField = typeof(BobosWorld.Garden).GetField("_curDateTime", flags);
+            object dateTimeSO = dateTimeSOField?.GetValue(garden);
+            var valueProp = dateTimeSO?.GetType().GetProperty("Value", flags);
+            object currentDate = valueProp?.GetValue(dateTimeSO);
+            if (currentDate == null) return;
+
+            var method = typeof(BobosWorld.CompetitionOrganizer).GetMethod("SetTodaysCompetitions", flags);
+            method?.Invoke(organizer, new object[] { currentDate });
+            Plugin.Log?.LogInfo("[Archipelago] Forced competition/saga refresh after loading thresholds.");
+        }
         public static void ApplySnackMultiplier(float multiplier)
         {
             if (multiplier <= 0f) multiplier = 1f;
@@ -426,28 +527,85 @@ namespace BoboBayArchipelago
 
         public static readonly Dictionary<long, string> ItemAssetNames = new Dictionary<long, string>
         {
-            { 20050001, "Leftover Pizza" },
-            { 20050002, "Palmwelon" },
-            { 20050003, "Gumball_ConcernedEyes" },
-            { 20050004, "Goldenana" },
-            { 20050005, "Bunny_Cracker" },
-            { 20050006, "Skyberry" },
-            { 20050007, "Juice_EnergyDrink_Hype" },
-            { 20050008, "BusinessGlasses_Gold" },
-            { 20050009, "SagaMedal_HotTop" },
-            { 20050010, "DarkGlasses_Yellow" },
-            { 20050011, "Shoes_A_White" },
-            { 20050012, "SagaMedal_Gear" },
-            { 20050013, "CoolHelmet_Secondary" },
-            { 20050014, "SagaMedal_DashClassic" },
-            { 20050015, "CopGlasses_Silver" },
-            { 20050016, "KnitHat_Blue" },
-            { 20050017, "TopHat_Big_Black" },
-            { 20050018, "ToyItem_StuffedAnimal" },
+            // Trait items
+            { 20050400, "Trait_BalancePole" },
+            { 20050401, "Trait_Skimboard" },
+            { 20050402, "Trait_SteelChair" },
+            { 20050403, "Trait_TrainerCube" },
+            { 20050404, "Trait_PlyoBox" },
+            { 20050405, "Trait_Lockpick" },
+            { 20050406, "Trait_ResistanceBand" },
+            { 20050407, "Trait_FakeID" },
+            { 20050408, "Trait_Teapot" },
+            { 20050409, "Trait_Glider" },
+            { 20050410, "Trait_Gun" },
+            { 20050411, "Trait_SlotMachine" },
+            { 20050412, "Trait_Dumbbell" },
+            { 20050413, "Trait_FishingRod" },
+            { 20050414, "Trait_Shovel" },
+            { 20050415, "Trait_JumpRope" },
+            { 20050416, "Trait_Skillet" },
+            { 20050417, "Trait_Trident" },
+            { 20050418, "Trait_LumiStar" },
+            { 20050419, "Trait_StickyHand" },
+            { 20050420, "Trait_PocketSand" },
+            { 20050421, "Trait_Teleporter" },
+            { 20050422, "Trait_Funnel" },
+            { 20050423, "Trait_Clipboard" },
+            { 20050424, "Trait_BoxingGloves" },
+            { 20050425, "Trait_IceAxes" },
+            { 20050426, "Trait_GoodLuckCharm" },
+            { 20050427, "Trait_MoodStabilizer" },
+            { 20050428, "Trait_BananaPeel" },
+            { 20050429, "Trait_FlintAndSteel" },
+            { 20050430, "Trait_Skateboard" },
+            { 20050431, "Trait_Sword" },
+            { 20050432, "Trait_Inhaler" },
+            
+            // Other items
+            { 20050500, "Bed_Cute_Pink" },
+            { 20050501, "Bed_RoundTent_Red" },
+            { 20050502, "Bed_BasicSleepingBag_Black" },
+            { 20050503, "Bed_Grave" },
+            { 20050504, "Bed_RaceCar_Blue" },
+            { 20050505, "Bed_RaceCar_Red" },
+            { 20050506, "Bed_RoundTent_Yellow" },
+            { 20050507, "Bed_CatBed_Purple" },
+            { 20050508, "Bed_Cute_Red" },
+            { 20050509, "Bed_Crib_Blue" },
+            { 20050510, "Bed_RoundTent_Blue" },
+            { 20050511, "Bed_RoundTent_Black" },
+            { 20050512, "Medicine" },
+            { 20050513, "Bed_BasicSleepingBag_Purple" },
+            { 20050514, "Bed_BasicSleepingBag_White" },
+            { 20050515, "Bed_BasicSleepingBag_Blue" },
+            { 20050516, "Bed_BasicSleepingBag_Red" },
+            { 20050517, "Bed_BasicSleepingBag_Yellow" },
+            { 20050518, "Bed_BasicSleepingBag_Green" },
+            { 20050519, "Bed_Cute_Black" },
+            { 20050520, "Bed_LilyPad" },
+            { 20050521, "Bed_Trash" },
+            { 20050522, "Bed_Raft" },
+            { 20050523, "Bed_RaceCar_Green" },
+            { 20050524, "Bed_CatBed_Blue" },
+            { 20050525, "Bed_Crib_Pink" },
+            { 20050526, "Bed_RaceCar_Black" },
+            
+            { 20050050, "Bunny_Cracker" },
+            { 20050051, "Crackthrust_Hype" },
+            { 20050052, "ToyItem_StuffedAnimal" },
+
+
             // Junk items
-            // 150 money is 20050020
-            { 20050021, "Gumball_ConcernedEyes" },
-            { 20050022, "Skyberry" },
+            // 75 money is 20050090
+            { 20050091, "Gumball_ConcernedEyes" },
+            { 20050092, "Pie - Banana Cream" },
+            { 20050093, "Pie - Key Lime" },
+            { 20050094, "Pie - Blueberry" },
+            { 20050095, "Pie - Pecan" },
+            { 20050096, "Thick Pie" },
+            { 20050097, "Thick Pie with Love" },
+            { 20050098, "Baked_Cake" },
         };
 
         public static void SpawnItemByAsset(string assetName)
@@ -588,6 +746,13 @@ namespace BoboBayArchipelago
             Plugin.Log?.LogInfo($"Archipelago: granted {amount} bobo bucks.");
         }
 
+        public static void GrantProgressiveSagas()
+        {
+            if (ProgressiveSagasReceivedEntry != null)
+                ProgressiveSagasReceivedEntry.Value++;
+            Plugin.Log?.LogInfo($"[Archipelago] Progressive Sagas received ({ProgressiveSagasReceived}).");
+        }
+
         public static void GrantReceivedItem(long itemID)
         {
             if (ItemAssetNames.TryGetValue(itemID, out string assetName))
@@ -601,11 +766,14 @@ namespace BoboBayArchipelago
                 case ProgressiveCompetitionsId:
                     GrantProgressiveCompetitions();
                     break;
+                case ProgressiveSagasId:
+                    GrantProgressiveSagas();
+                    break;
                 case BoboTicketId:
                     GrantBoboTicket();
                     break;
-                case 20050020:
-                    GrantMoney(150);
+                case 20050090:
+                    GrantMoney(75);
                     break;
                 case 20050099:
                     Plugin.Log?.LogInfo("[Archipelago] VICTORY item received! Congratulations!");
@@ -754,6 +922,13 @@ namespace BoboBayArchipelago
                             ArchipelagoItemHandler.CompetitionUnlockThresholds = ParseThresholds(thresholdsObj);
                             Plugin.Log?.LogInfo($"[Archipelago] Loaded {ArchipelagoItemHandler.CompetitionUnlockThresholds.Count} competition unlock threshold(s).");
                         }
+                        if (success.SlotData.TryGetValue("saga_unlock_thresholds", out object sagaThresholdsObj))
+                        {
+                            ArchipelagoItemHandler.SagaUnlockThresholds = ParseThresholds(sagaThresholdsObj);
+                            Plugin.Log?.LogInfo($"[Archipelago] Loaded {ArchipelagoItemHandler.SagaUnlockThresholds.Count} saga unlock threshold(s).");
+                        }
+
+                        ArchipelagoItemHandler.ForceRefreshCompetitions();
                     }
                     else
                     {
