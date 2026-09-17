@@ -4,8 +4,8 @@ from .Items import item_table, create_itempool, create_item
 from .Locations import location_table, get_location_names
 from .Regions import create_regions
 from .Rules import set_rules
-from .Options import BoboOptions, create_option_groups
-from .CompetitionUnlocks import get_competition_unlock_order, get_saga_unlock_order, SAGA_RACES
+from .Options import BoboOptions, create_option_groups, get_goal_name
+from .CompetitionUnlocks import get_competition_unlock_order, get_saga_unlock_order, get_goal_saga, SAGA_RACES
 
 
 class BoboWeb(WebWorld):
@@ -42,9 +42,12 @@ class BoboWorld(World):
 
     def fill_slot_data(self) -> dict:
         return {
-            "bobo_tickets_req": self.options.BoboTicketsRequired.value,
-            "competition_unlock_thresholds": get_competition_unlock_order(self),"snack_multiplier": getattr(self.options, "SnackMultiplier", 1).value
+            "goal_asset_name":                          get_goal_name(self),
+            "goal_saga_name":                           get_goal_saga(self) or "",
+            "bobo_tickets_req":                         self.options.BoboTicketsRequired.value,
+            "competition_unlock_thresholds":            get_competition_unlock_order(self),
+            "snack_multiplier": getattr(self.options, "SnackMultiplier", 1).value
             if hasattr(self.options, "SnackMultiplier") else 1,
-            "saga_unlock_thresholds": get_saga_unlock_order(self),
-            "unlimited_snacks": bool(getattr(self.options, "UnlimitedSnacks", False)),
+            "saga_unlock_thresholds":                   get_saga_unlock_order(self),
+            "unlimited_snacks":                         bool(getattr(self.options, "UnlimitedSnacks", False)),
         }

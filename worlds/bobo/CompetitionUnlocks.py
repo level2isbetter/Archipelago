@@ -1,10 +1,10 @@
 from typing import Dict, List, TYPE_CHECKING
 from .Locations import location_table
+from .Options import get_goal_name
 
 if TYPE_CHECKING:
     from . import BoboWorld
 
-GOAL_ASSET_NAMES = {"BigJam_Race_D", "Race_S_PowerGary"}
 RANK_ORDER = ["E", "D", "C", "B", "A", "S"]
 SAGA_ORDER = [
     "Saga_GumballCup", "Saga_FruitCup", "Saga_CrackthrustCup", 
@@ -38,6 +38,11 @@ SAGA_RACES = {
     "Saga_TheFinalStar": ["Race_S_PowerGary"],
 }
 
+_ASSET_TO_SAGA = {asset: saga for saga, assets in SAGA_RACES.items() for asset in assets}
+
+def get_goal_saga(world: "BoboWorld") -> str:
+    return _ASSET_TO_SAGA.get(get_goal_name(world))
+
 def build_competition_unlock_order(world: "BoboWorld") -> Dict[str, int]:
     batch_size = world.options.CompetitionsPerUnlock.value
 
@@ -58,7 +63,9 @@ def build_competition_unlock_order(world: "BoboWorld") -> Dict[str, int]:
 
 def build_saga_unlock_order(world: "BoboWorld") -> Dict[str, int]:
     batch_size = world.options.SagasPerUnlock.value
-    return {name: i // batch_size for i, name in enumerate(SAGA_ORDER)}
+    goal_saga = get_goal_saga(world)
+    order = [s for s in SAGA_ORDER if s != goal_saga]
+    return {name: i // batch_size for i, name in enumerate(order)}
 
 def get_saga_unlock_order(world: "BoboWorld") -> Dict[str, int]:
     if not hasattr(world, "_saga_unlock_cache"):
@@ -66,6 +73,18 @@ def get_saga_unlock_order(world: "BoboWorld") -> Dict[str, int]:
     return world._saga_unlock_cache
 
 def get_competition_unlock_order(world: "BoboWorld") -> Dict[str, int]:
-    if not hasattr(world, "_competition_unlock_cache"):
-        world._competition_unlock_cache = build_competition_unlock_order(world)
-    return world._competition_unlock_cache
+    batch_size = world.options.CompetitionsPerUnlock.value
+    goal_asset = get_goal_name(world)
+
+    thresholds: Dict[str, int] = {}
+    batch_offset = 0
+    for rank in RANK_ORDER:
+        names = [
+            data.asset_name for data in location_table.values()
+            if data.rank == rank and data.asset_name and data.asset_name != goal_asset
+        ]
+        for i, name in enumerate(names):
+            thresholds[name] = batch_offset + (i // batch_size)
+        if names:
+            batch_offset += ((len(names) - 1) // batch_size) + 1
+    return thresholds

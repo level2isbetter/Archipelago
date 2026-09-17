@@ -7,6 +7,7 @@ from .Locations import get_total_locations
 from typing import List, Dict, TYPE_CHECKING
 from .CompetitionUnlocks import get_competition_unlock_order
 from .CompetitionUnlocks import get_saga_unlock_order
+from .Options import get_goal_name
 
 if TYPE_CHECKING:
     from . import BoboWorld
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
 def create_itempool(world: "BoboWorld") -> List[Item]:
     itempool: List[Item] = []
 
+    goal_asset = get_goal_name(world)
+    goal_event_name = "Beat Big Jam" if goal_asset == "BigJam_Race_D" else "Beat Power Gary"
     # Add all unique items (excluding Victory, which is placed on Beat Big Jam)
     for name, data in bobo_items.items():
         if name not in ("Victory", "Bobo Ticket", "Progressive Competitions"):
@@ -39,7 +42,7 @@ def create_itempool(world: "BoboWorld") -> List[Item]:
 
     # Place victory at the final location
     victory = create_item(world, "Victory")
-    world.multiworld.get_location("Beat Big Jam", world.player).place_locked_item(victory)
+    world.multiworld.get_location(goal_event_name, world.player).place_locked_item(victory)
 
     # Fill remainder of locations with junk
     needed_junk = get_total_locations(world) - len(itempool) - 1

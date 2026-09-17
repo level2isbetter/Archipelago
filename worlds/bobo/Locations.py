@@ -2,6 +2,7 @@ from typing import Dict, TYPE_CHECKING
 import logging
 
 from .Types import LocData
+from .Options import get_goal_name
 
 if TYPE_CHECKING:
     from . import BoboWorld
@@ -36,7 +37,10 @@ def get_location_names() -> Dict[str, int]:
 def is_valid_location(world: "BoboWorld", name) -> bool:
     if not did_include_extra_locations(world) and name in extra_locations:
         return False
-    
+    if name in event_locations:
+        goal_asset = get_goal_name(world)
+        if event_locations[name].asset_name != goal_asset:
+            return False
     return True
 
 # Heres where you do the next fun part of listing out all those locations
@@ -276,7 +280,8 @@ saga_locations = {
 extra_locations = {}
 
 event_locations = {
-    "Beat Big Jam": LocData(None, "Competitions"),
+    "Beat Big Jam":    LocData(None, "Competitions", "BigJam_Race_D", "D"),
+    "Beat Power Gary": LocData(None, "Competitions", "Race_S_PowerGary", "S"),
 }
 
 location_table = {

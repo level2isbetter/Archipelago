@@ -3,12 +3,30 @@ from dataclasses import dataclass
 from worlds.AutoWorld import PerGameCommonOptions
 from Options import Choice, OptionGroup, Toggle, Range
 
+GOAL_NAMES = {
+    0: "BigJam_Race_D",
+    1: "Race_S_PowerGary",
+}
+
+def get_goal_name(world) -> str:
+    return GOAL_NAMES.get(world.options.Goal.value, "BigJam_Race_D")
+
 def create_option_groups() -> List[OptionGroup]:
     option_group_list: List[OptionGroup] = []
-    for name, options in ap_skeleton_option_groups.items():
+    for name, options in bobo_option_groups.items():
         option_group_list.append(OptionGroup(name=name, options=options))
 
     return option_group_list
+
+class Goal(Choice):
+    """
+    Pick goal for the game. Big Jam for faster runs, Power Gary for longer runs.
+    """
+    display_name = "Goal"
+    option_big_jam = 0
+    option_power_gary = 1
+    default = 0
+
 class ExtraLocations(Toggle):
     """
     This will enable the extra locations option. Toggle is just true or false.
@@ -61,15 +79,16 @@ class SagasPerUnlock(Range):
 
 @dataclass
 class BoboOptions(PerGameCommonOptions):
+    Goal:                        Goal
     ExtraLocations:              ExtraLocations
     BoboTicketsRequired:         BoboTicketsRequired
-    SnackMultiplier:            SnackMultiplier
-    UnlimitedSnacks:            UnlimitedSnacks
-    CompetitionsPerUnlock:        CompetitionsPerUnlock
-    SagasPerUnlock:               SagasPerUnlock
+    SnackMultiplier:             SnackMultiplier
+    UnlimitedSnacks:             UnlimitedSnacks
+    CompetitionsPerUnlock:       CompetitionsPerUnlock
+    SagasPerUnlock:              SagasPerUnlock
 
 # This is where you organize your options
 # Its entirely up to you how you want to organize it
-ap_skeleton_option_groups: Dict[str, List[Any]] = {
-    "General Options": [BoboTicketsRequired, SnackMultiplier, UnlimitedSnacks, ExtraLocations, CompetitionsPerUnlock, SagasPerUnlock],
+bobo_option_groups: Dict[str, List[Any]] = {
+    "General Options": [Goal, BoboTicketsRequired, SnackMultiplier, UnlimitedSnacks, ExtraLocations, CompetitionsPerUnlock, SagasPerUnlock],
 }
