@@ -66,13 +66,13 @@ def set_rules(world: "BoboWorld"):
                     world.multiworld.get_location(loc, player),
                     lambda state: state.has("Bobo Ticket", player, ticket_required)
                 )
-
-    if goal_loc_name:
+    else:
         goal_loc_name = asset_to_locname.get(goal_asset)
-        add_rule(
-            world.multiworld.get_location(goal_loc_name, player),
-            lambda state: state.has("Bobo Ticket", player, ticket_required)
-        )
+        if goal_loc_name:
+            add_rule(
+                world.multiworld.get_location(goal_loc_name, player),
+                lambda state: state.has("Bobo Ticket", player, ticket_required)
+            )
 
     # Victory :)
     world.multiworld.completion_condition[player] = lambda state: state.has("Victory", player)

@@ -14,6 +14,8 @@ namespace BoboBayArchipelago
         [HarmonyPostfix]
         public static void Postfix()
         {
+            if (!Plugin.DebugLoggingEnabled.Value) return;
+
             try
             {
                 var all = Resources.FindObjectsOfTypeAll<CompetitionSO>();
@@ -52,6 +54,8 @@ namespace BoboBayArchipelago
         [HarmonyPostfix]
         public static void Postfix()
         {
+            if (!Plugin.DebugLoggingEnabled.Value) return;
+
             try
             {
                 var sagas = Resources.FindObjectsOfTypeAll<CompetitionSeriesSO_Saga>();
@@ -83,6 +87,7 @@ namespace BoboBayArchipelago
         [HarmonyPostfix]
         public static void Postfix(CompetitionSO __instance, ref bool __result)
         {
+            if (!Plugin.DebugLoggingEnabled.Value) return;
             if (__instance == null || !__instance.isSaga) return;
             Plugin.Log?.LogInfo($"[APDebug] Saga comp '{__instance.name}': saga='{__instance.saga?.name}', saga.locked={__instance.saga?.locked}, Unlocked()={__result}");
         }
