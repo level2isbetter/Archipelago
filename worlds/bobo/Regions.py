@@ -10,6 +10,7 @@ def create_regions(world: "BoboWorld"):
     menu = create_region(world, "Menu")
     competitions = create_region_and_connect(world, "Competitions", "Menu -> Competitions", menu)
     sagas = create_region_and_connect(world, "Sagas", "Menu -> Sagas", menu)
+    pubworks = create_region_and_connect(world, "Public Works", "Menu -> Public Works", menu)
 
 def create_region(world: "BoboWorld", name: str) -> Region:
     reg = Region(name, world.player, world.multiworld)

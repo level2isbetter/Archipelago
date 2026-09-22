@@ -43,22 +43,25 @@ _ASSET_TO_SAGA = {asset: saga for saga, assets in SAGA_RACES.items() for asset i
 def get_goal_saga(world: "BoboWorld") -> str:
     return _ASSET_TO_SAGA.get(get_goal_name(world))
 
-def build_competition_unlock_order(world: "BoboWorld") -> Dict[str, int]:
+def get_competition_unlock_order(world: "BoboWorld") -> Dict[str, int]:
     batch_size = world.options.CompetitionsPerUnlock.value
+    goal_asset = get_goal_name(world)
+    saga_assets = {asset for assets in SAGA_RACES.values() for asset in assets}
 
     thresholds: Dict[str, int] = {}
     batch_offset = 0
     for rank in RANK_ORDER:
         names = [
             data.asset_name for data in location_table.values()
-            if data.rank == rank and data.asset_name and data.asset_name not in GOAL_ASSET_NAMES
+            if data.rank == rank
+            and data.asset_name
+            and data.asset_name != goal_asset
+            and data.asset_name not in saga_assets
         ]
         for i, name in enumerate(names):
             thresholds[name] = batch_offset + (i // batch_size)
-
         if names:
             batch_offset += ((len(names) - 1) // batch_size) + 1
-
     return thresholds
 
 def build_saga_unlock_order(world: "BoboWorld") -> Dict[str, int]:

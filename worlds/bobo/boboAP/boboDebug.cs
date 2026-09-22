@@ -49,6 +49,47 @@ namespace BoboBayArchipelago
     }
 
     [HarmonyPatch(typeof(GardenManager), "Awake")]
+    public static class PublicWorksDumpPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            if (!Plugin.DebugLoggingEnabled.Value) return;
+
+            try
+            {
+                var collections = Resources.FindObjectsOfTypeAll<PublicWorksProjectCollectionSO>();
+                Plugin.Log?.LogInfo($"[APDebug] Found {collections.Length} PublicWorksProjectCollectionSO asset(s).");
+
+                foreach (var col in collections)
+                {
+                    Plugin.Log?.LogInfo($"=== Collection: {col.name} (Count: {col.collection?.Count ?? 0}) ===");
+                    if (col.collection == null) continue;
+
+                    foreach (var kvp in col.collection)
+                    {
+                        PublicWorksProjectSO pwp = kvp.Key;
+                        bool isUnlockedOrPurchased = kvp.Value;
+
+                        if (pwp == null) continue;
+
+                        string assetName = pwp.name;
+                        string titleKey = pwp.titleKey;
+                        int cost = pwp.cost != null ? pwp.cost.Value : 0;
+                        PWPTypes type = pwp.type;
+
+                        Plugin.Log?.LogInfo($"  [{assetName}] titleKey='{titleKey}', cost={cost}, type={type} => bool={isUnlockedOrPurchased}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log?.LogError($"[APDebug] PublicWorksDumpPatch failed: {ex}");
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(GardenManager), "Awake")]
     public static class SagaRosterDumpPatch
     {
         [HarmonyPostfix]

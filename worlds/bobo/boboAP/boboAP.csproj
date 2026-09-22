@@ -20,25 +20,31 @@
 
     <!-- Unity Managed DLL References -->
     <Reference Include="UnityEngine">
-      <HintPath>$(GameFolder)\BoboBay_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(GameFolder)\BoboBay_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>$(GameFolder)\BoboBay_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>$(GameFolder)\BoboBay_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>$(GameFolder)\BoboBay_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\UnityEngine.UI.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>$(GameFolder)\BoboBay_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
     <Reference Include="Sirenix.Serialization">
-      <HintPath>$(GameFolder)\BoboBay_Data\Managed\Sirenix.Serialization.dll</HintPath>
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\Sirenix.Serialization.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityAtoms.UnityAtomsBaseAtoms.Runtime">
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\UnityAtoms.UnityAtomsBaseAtoms.Runtime.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityAtoms.UnityAtomsCore.Runtime">
+      <HintPath>$(GameFolder)\Bobo Bay_Data\Managed\UnityAtoms.UnityAtomsCore.Runtime.dll</HintPath>
     </Reference>
   </ItemGroup>
 

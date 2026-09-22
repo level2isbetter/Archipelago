@@ -12,16 +12,23 @@ from .Options import get_goal_name
 if TYPE_CHECKING:
     from . import BoboWorld
 
+# If you're curious about the -> List[Item] that is a syntax to make sure you return the correct variable type
+# In this instance we're saying we only want to return a list of items
+# You'll see a bunch of other examples of this in other functions
+# It's main purpose is to protect yourself from yourself
 def create_itempool(world: "BoboWorld") -> List[Item]:
     itempool: List[Item] = []
 
     goal_asset = get_goal_name(world)
     goal_event_name = "Beat Big Jam" if goal_asset == "BigJam_Race_D" else "Beat Power Gary"
-
-    # Add all unique items (excluding victory which is on the goal competition)
+    # Add all unique items (excluding Victory, which is placed on Beat Big Jam)
     for name, data in bobo_items.items():
         if name not in ("Victory", "Bobo Ticket", "Progressive Competitions"):
             itempool.append(create_item(world, name))
+
+    # pubworks stuff, gonna make it an option later
+    for name in pubworks_items:
+        itempool.append(create_item(world, name))
     
     # bobo ticket logic stuff
     ticket_count = world.options.BoboTicketsRequired.value
@@ -37,11 +44,11 @@ def create_itempool(world: "BoboWorld") -> List[Item]:
     max_saga_batch = max(saga_thresholds.values()) if saga_thresholds else 0
     itempool += create_multiple_items(world, "Progressive Sagas", max_saga_batch, ItemClassification.progression)
 
-    # place victory at the goal competition
+    # Place victory at the final location
     victory = create_item(world, "Victory")
     world.multiworld.get_location(goal_event_name, world.player).place_locked_item(victory)
 
-    # fill remainder of locations with junk
+    # Fill remainder of locations with junk
     needed_junk = get_total_locations(world) - len(itempool) - 1
     if needed_junk > 0:
         itempool += create_junk_items(world, needed_junk)
@@ -64,7 +71,7 @@ def create_multiple_items(world: "BoboWorld", name: str, count: int,
 
     return itemlist
 
-# junk items
+# Finally, where junk items are created
 def create_junk_items(world: "BoboWorld", count: int) -> List[Item]:
     junk_pool: List[Item] = []
     junk_names = list(junk_weights.keys())
@@ -76,12 +83,12 @@ def create_junk_items(world: "BoboWorld", count: int) -> List[Item]:
 
     return junk_pool
 
+# Items from Bobo Bay
 bobo_items = {
     # Progression
     "Bobo Ticket":           ItemData(20050000, ItemClassification.progression),
     "Progressive Competitions": ItemData(20050001, ItemClassification.progression),
     "Progressive Sagas":     ItemData(20050002, ItemClassification.progression),
-    "D-Rank License":        ItemData(20050003, ItemClassification.progression),
 
     # Trait Items
     "Balance Pole":       ItemData(20050400, ItemClassification.useful),
@@ -160,10 +167,42 @@ bobo_items = {
     "Victory":               ItemData(20050099, ItemClassification.progression),
 }
 
+<<<<<<< Updated upstream
+# Items used to fill empty slots
+=======
+# public works items
+pubworks_items = {
+    "Public Works - Fix Benches":                       ItemData(20050600, ItemClassification.useful),
+    "Public Works - Basketball Hoop":                   ItemData(20050601, ItemClassification.useful),
+    "Public Works - Bench in Garden":                   ItemData(20050602, ItemClassification.useful),
+    "Public Works - Bobo Copy Machine":                 ItemData(20050603, ItemClassification.progression),
+    "Public Works - Bobo Full Stat Viewer":             ItemData(20050604, ItemClassification.progression),
+    "Public Works - Boombox":                           ItemData(20050605, ItemClassification.useful),
+    "Public Works - Additional Camps":                  ItemData(20050606, ItemClassification.progression),
+    "Public Works - Cave Excursion":                    ItemData(20050607, ItemClassification.progression),
+    "Public Works - Deep Forest Excursion":             ItemData(20050608, ItemClassification.progression),
+    "Public Works - Gumball Machine":                   ItemData(20050609, ItemClassification.useful),
+    "Public Works - Increase Competitions Per Day":     ItemData(20050610, ItemClassification.progression),
+    "Public Works - Increase Item Storage in Bayfarer": ItemData(20050611, ItemClassification.progression),
+    "Public Works - Soccer Ball":                       ItemData(20050612, ItemClassification.useful),
+    "Public Works - Storage Shed":                      ItemData(20050613, ItemClassification.progression),
+    "Public Works - Toy Blocks":                        ItemData(20050614, ItemClassification.useful),
+    "Public Works - Tree Farm Excursion":               ItemData(20050615, ItemClassification.progression),
+    "Public Works - TV":                                ItemData(20050616, ItemClassification.useful),
+    "Public Works - Vending Machine":                   ItemData(20050617, ItemClassification.useful),
+    "Public Works - Secret Garden":                     ItemData(20050618, ItemClassification.progression),
+    "Public Works - Restaurant":                        ItemData(20050619, ItemClassification.progression),
+    "Public Works - Item Shop":                         ItemData(20050620, ItemClassification.progression),
+    "Public Works - Animal Cracker Shop":               ItemData(20050621, ItemClassification.useful),
+    "Public Works - Costume Shop":                      ItemData(20050622, ItemClassification.useful),
+    "Public Works - Original Bobo Statue":              ItemData(20050623, ItemClassification.useful),
+    "Public Works - Fairy Garden":                      ItemData(20050624, ItemClassification.progression),
+}
+
 # junk item stuff again
+>>>>>>> Stashed changes
 junk_items = {
-    "75 money":                    ItemData(20050090, ItemClassification.filler, 0),
-    "Gumball (Concerned Eyes)":    ItemData(20050091, ItemClassification.filler, 0),
+    "150 money":                    ItemData(20050090, ItemClassification.filler, 0),
     "Banana Cream Pie":            ItemData(20050092, ItemClassification.filler, 0),
     "Key Lime Pie":                ItemData(20050093, ItemClassification.filler, 0),
     "Blueberry Pie":               ItemData(20050094, ItemClassification.filler, 0),
@@ -174,13 +213,12 @@ junk_items = {
 }
 
 junk_weights = {
-    "75 money": 50,
-    "Gumball (Concerned Eyes)": 5,
+    "150 money": 50,
     "Banana Cream Pie":       5,
     "Key Lime Pie":           5,
     "Blueberry Pie":          5,
     "Pecan Pie":              5,
-    "Thick Pie":              19,
+    "Thick Pie":              24,
     "Thick Pie with Love":    1,
     "Baked Cake":             5,
 }
@@ -188,4 +226,5 @@ junk_weights = {
 item_table = {
     **bobo_items,
     **junk_items,
+    **pubworks_items,
 }

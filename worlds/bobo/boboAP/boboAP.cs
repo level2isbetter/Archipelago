@@ -3,6 +3,7 @@ using System;
 using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
+using System.Collections.Concurrent;
 using Archipelago.MultiClient.Net;
 using Archipelago.MultiClient.Net.Packets;
 using Archipelago.MultiClient.Net.Enums;
@@ -13,6 +14,7 @@ using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityAtoms.BaseAtoms;
 
 namespace BoboBayArchipelago
 {
@@ -72,13 +74,6 @@ namespace BoboBayArchipelago
                 {
                     forceAvailable = ArchipelagoItemHandler.ProgressiveCompetitionsReceived >= required;
                 }
-                else
-                {
-                    forceAvailable = competition.rank == Grade.E
-                        || (competition.rank == Grade.D && ArchipelagoItemHandler.DRankUnlocked);
-                }
-
-                if (!forceAvailable) continue;
 
                 competition.dayMonday = true;
                 competition.dayTuesday = true;
@@ -134,30 +129,6 @@ namespace BoboBayArchipelago
         }
     }
 
-    [HarmonyPatch(typeof(Bobo), "UpdateStatPoints")]
-    public static class SnackStatMultiplierPatch
-    {
-        [HarmonyPrefix]
-        public static void Prefix(ref float multiplier)
-        {
-            if (ArchipelagoItemHandler.CurrentSnackMultiplier > 1f)
-            {
-                multiplier *= ArchipelagoItemHandler.CurrentSnackMultiplier;
-            }
-        }
-    }
-    
-    [HarmonyPatch(typeof(BoboData), "NewFullDay")]
-    public static class UnlimitedSnacksPatch
-    {
-        [HarmonyPostfix]
-        static void Postfix(BoboData __instance)
-        {
-            if (!ArchipelagoItemHandler.UnlimitedSnacksEnabled) return;
-            __instance.FoodMod = 999;
-        }
-    }
-
     [HarmonyPatch(typeof(CompetitionManager), "EndEvent")]
     public static class CompetitionPatch
     {
@@ -204,6 +175,51 @@ namespace BoboBayArchipelago
             }
         }
     }
+
+    [HarmonyPatch(typeof(UIPublicWorksPurchaseConfirmation), "Yes")]
+    public static class PublicWorksPurchasePatch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(UIPublicWorksPurchaseConfirmation __instance)
+        {
+            // get project being purchased
+            var project = Traverse.Create(__instance).Field("_publicWorksProject").GetValue<PublicWorksProjectSO>();
+            if (project == null) return true;
+            
+            // map project name to location in AP
+            if (PublicWorksLocations.All.TryGetValue(project.name, out long locationID))
+            {
+                ArchipelagoManager.CheckLocation(locationID);
+                Plugin.Log?.LogInfo($"[AP] Checked Public Works location: {project.name} ({locationID})");
+            }
+
+            // mark check so its hidden
+            ArchipelagoItemHandler.MarkPWPCheckCompleted(project.name);
+
+            // deduct public fund money
+            var fundField = Traverse.Create(__instance).Field("_publicFund").GetValue<IntVariable>();
+            int cost = project.cost != null ? project.cost.Value : Common.DEFAULT_PWPCOST;
+            fundField?.Subtract(cost);
+
+            // play sound and update ui
+            Traverse.Create(__instance).Field("_purchaseSound").Method("Play2D").GetValue();
+            var uiPWP = Traverse.Create(__instance).Field("_uiPublicWorks").GetValue<UIPublicWorksProjects>();
+            uiPWP?.RemoveRecord(project);
+            __instance.gameObject.SetActive(false);
+            
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(SaveSystem), "LoadData")]
+    public static class SaveSystemLoadDataPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            ArchipelagoItemHandler.SyncItemsFromServer();
+        }
+    }
     
     [HarmonyPatch(typeof(GardenBoboAITree))]
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
@@ -213,17 +229,16 @@ namespace BoboBayArchipelago
         public const string PluginName = "BoboBay.Archipelago";
         public const string PluginVersion = "0.1.0";
 
-        // Persistent static logging and configuration references
+        
         public static ManualLogSource Log { get; private set; }
         public static ConfigFile ConfigFile { get; private set; }
 
-        // BepInEx Configuration Entries
+
         public static ConfigEntry<string> ServerAddressEntry;
         public static ConfigEntry<string> SlotNameEntry;
         public static ConfigEntry<string> PasswordEntry;
         public static ConfigEntry<bool> AutoConnectEntry;
         public static ConfigEntry<int> BoboTicketsRequiredEntry;
-        public static ConfigEntry<string> LastSeedEntry;
         public static ConfigEntry<bool> DebugLoggingEnabled;
 
         private static bool _foodModPending = false;
@@ -241,9 +256,9 @@ namespace BoboBayArchipelago
             SlotNameEntry = Config.Bind("Archipelago", "SlotName", "Player", "Slot name registered in the Archipelago multiworld.");
             PasswordEntry = Config.Bind("Archipelago", "Password", "", "Password for the room (if required).");
             AutoConnectEntry = Config.Bind("Archipelago", "AutoConnect", false, "Automatically attempt connection on startup.");
-            LastSeedEntry = Config.Bind("Archipelago", "LastSeed", "", "Internal: tracks the last connected seed, to auto-reset progress counters on a new seed.");
             DebugLoggingEnabled = Config.Bind("Archipelago", "DebugLogging", false,
                 "Enable logging (competition/saga rosters, unlock checks). Off by default. I used this in development mainly, didn't want to get rid of it.");
+
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
 
@@ -257,7 +272,7 @@ namespace BoboBayArchipelago
             };
 
             // Apply Harmony patches
-            Harmony.CreateAndPatchAll(System.Reflection.Assembly.GetExecutingAssembly(), PluginGuid);
+            Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), PluginGuid);
 
             BoboTicketsRequiredEntry = Config.Bind("Archipelago", "BoboTicketsRequiredEntry", 3,
                 "Internal: how many bobo tickets unlock the goal competition.");
@@ -267,10 +282,9 @@ namespace BoboBayArchipelago
 
         private void Update()
         {
-            if (ArchipelagoManager.IsConnected && ArchipelagoManager.IsInBay)
-            {
-                ArchipelagoManager.ProcessPendingItems();
-            }
+
+            ArchipelagoManager.ProcessPendingSync();
+            ArchipelagoManager.ProcessPendingItems();
 
             if (_foodModPending && ArchipelagoManager.IsInBay){
                 if (ArchipelagoItemHandler.ApplyFoodModToCurrentGarden() > 0){
@@ -306,6 +320,7 @@ namespace BoboBayArchipelago
             } 
         }
 
+        // ill move this eventually
         private static void DumpItemSpawnMembers()
         {
             var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
@@ -331,25 +346,13 @@ namespace BoboBayArchipelago
     public static class ArchipelagoItemHandler
     {
         public static long CurrentItemIndex { get; set; } = 0;
-        public static int BoboTicketsReceived { get; set; } = 0;
-        public static int ProgressiveCompetitionsReceived { get; set; } = 0;
-        public static int ProgressiveSagasReceived { get; set; } = 0;
+        public static int BoboTicketsReceived => ArchipelagoManager.CountReceived(BoboTicketId);
+        public static int ProgressiveCompetitionsReceived => ArchipelagoManager.CountReceived(ProgressiveCompetitionsId);
+        public static int ProgressiveSagasReceived => ArchipelagoManager.CountReceived(ProgressiveSagasId);
 
-        public static ConfigEntry<bool> DRankUnlockedEntry, 
-            CRankUnlockedEntry, 
-            BRankUnlockedEntry, 
-            ARankUnlockedEntry, 
-            SRankUnlockedEntry;
-        public static ConfigEntry<int> ItemsGrantedIndexEntry;
-        public const long DRankUnlockItemId = 20050050;
         public const long BoboTicketId = 20050000;
         public const long ProgressiveCompetitionsId = 20050001;
         public const long ProgressiveSagasId = 20050002;
-        public static bool DRankUnlocked => DRankUnlockedEntry?.Value ?? false;
-        public static bool CRankUnlocked => CRankUnlockedEntry?.Value ?? false;
-        public static bool BRankUnlocked => BRankUnlockedEntry?.Value ?? false;
-        public static bool ARankUnlocked => ARankUnlockedEntry?.Value ?? false;
-        public static bool SRankUnlocked => SRankUnlockedEntry?.Value ?? false;
         public static int BoboTicketsRequired => Plugin.BoboTicketsRequiredEntry?.Value ?? 3;
         public static float CurrentSnackMultiplier { get; private set; } = 1f;
         public static bool UnlimitedSnacksEnabled { get; private set; } = false;
@@ -357,18 +360,76 @@ namespace BoboBayArchipelago
         private static readonly int BaseMaxStat = Common.DEFAULT_MAXSTATUPDATE;
         public static Dictionary<string, int> SagaUnlockThresholds = new Dictionary<string, int>();
         public static Dictionary<string, int> CompetitionUnlockThresholds = new Dictionary<string, int>();
+        public static HashSet<string> CompletedPWPChecks { get; } = new HashSet<string>();
+        public static HashSet<string> ReceivedPWPItems { get; } = new HashSet<string>();
         public static string GoalAssetName = "BigJam_Race_D";
         public static string GoalSagaName = "";
-        public static void BindProgressEntriesForSeed(string seed)
+
+        public static void MarkPWPCheckCompleted(string pwpAssetName)
         {
-            string safeSeed = new string(seed.Where(c => char.IsLetterOrDigit(c)).ToArray());
-            if (string.IsNullOrEmpty(safeSeed)) safeSeed = "unknown";
-            string section = "Progress_" + safeSeed;
+            CompletedPWPChecks.Add(pwpAssetName);
+            Plugin.Log?.LogInfo($"[Archipelago] Public Works check completed: {pwpAssetName}");
+        }
 
-            ItemsGrantedIndexEntry = Plugin.ConfigFile.Bind(section, "ItemsGrantedIndex", 0,
-                "Progress for this specific seed — count of AP items already granted.");
+        
+        public static bool IsPWPCheckCompleted(string pwpAssetName)
+        {
+            if (CompletedPWPChecks.Contains(pwpAssetName)) return true;
+            // Also check if the server already marked this location as checked
+            if (PublicWorksLocations.All.TryGetValue(pwpAssetName, out long locId))
+            {
+                return ArchipelagoManager.IsLocationChecked(locId);
+            }
+            return false;
+        }
 
-            Plugin.Log?.LogInfo($"[Archipelago] Bound progress entries for seed section '{section}'.");
+        public static void ResetAndSyncPublicWorks()
+        {
+            var collections = Resources.FindObjectsOfTypeAll<PublicWorksProjectCollectionSO>();
+            var purchasedCol = collections.FirstOrDefault(c => c.name == "Public Works Projects Purchased");
+            if (purchasedCol == null || purchasedCol.collection == null) return;
+
+            // re-lock all pubworks stuff
+            var keys = purchasedCol.collection.Keys.ToList();
+            foreach (var key in keys)
+            {
+                purchasedCol.collection[key] = false;
+            }
+
+            // clear vanilla purchases
+            var toPurchaseLists = Resources.FindObjectsOfTypeAll<UnityAtoms.BobosWorld.PublicWorksProjectSOValueList>();
+            var toPurchase = toPurchaseLists.FirstOrDefault(l => l.name == "Public Works Projects TOPurchase");
+            toPurchase?.Clear();
+
+            // re-enable only the ones given by archipelago
+            foreach (var pwpName in ReceivedPWPItems)
+            {
+                var project = keys.FirstOrDefault(k => k.name == pwpName);
+                if (project != null)
+                {
+                    purchasedCol.collection[project] = true;
+                }
+            }
+            Plugin.Log?.LogInfo($"[Archipelago] Re-locked save's public works. Synced {ReceivedPWPItems.Count} AP-unlocked project(s).");
+        }
+
+        public static void SyncItemsFromServer()
+        {
+            if (!ArchipelagoManager.IsConnected || ArchipelagoManager.Session == null) return;
+            var allItems = ArchipelagoManager.Session.Items.AllItemsReceived;
+
+            ReceivedPWPItems.Clear();
+            foreach (var item in allItems)
+            {
+                if (PublicWorksItems.All.TryGetValue(item.ItemId, out string pwpAssetName))
+                {
+                    ReceivedPWPItems.Add(pwpAssetName);
+                }
+            }
+            
+            ResetAndSyncPublicWorks();
+            ForceRefreshCompetitions();
+            Plugin.Log?.LogInfo($"[Archipelago] Full Sync Complete: Comps={ProgressiveCompetitionsReceived}, Sagas={ProgressiveSagasReceived}, Tickets={BoboTicketsReceived}, PWPs={ReceivedPWPItems.Count}");
         }
 
         public static void GrantProgressiveCompetitions()
@@ -376,12 +437,11 @@ namespace BoboBayArchipelago
             // want to convert from unlocking competitions by rank
             // to unlocking sets of competitions to stagger the progression
             // ignore previous comments i did it yay
-            ProgressiveCompetitionsReceived++;
             Plugin.Log?.LogInfo($"[Archipelago] Progressive Competitions received ({ProgressiveCompetitionsReceived}).");
+            ForceRefreshCompetitions();
         }
         public static void GrantBoboTicket()
         {
-            BoboTicketsReceived++;
             Plugin.Log?.LogInfo($"[Archipelago] Bobo Ticket received ({BoboTicketsReceived}/{BoboTicketsRequired}).");
         }
         public static void SetBoboTicketsRequired(int required)
@@ -393,7 +453,7 @@ namespace BoboBayArchipelago
         public static void ForceRefreshCompetitions()
         {
             var organizer = UnityEngine.Object.FindObjectOfType(typeof(BobosWorld.CompetitionOrganizer)) as BobosWorld.CompetitionOrganizer;
-            if (organizer == null) return; // not in-game yet (e.g. connected from main menu) — nothing to refresh
+            if (organizer == null) return; // not in-game yet 
 
             var garden = BobosWorld.Garden.Current;
             if (garden == null) return;
@@ -496,8 +556,7 @@ namespace BoboBayArchipelago
 
 
             // Junk items
-            // 75 money is 20050090
-            { 20050091, "Gumball_ConcernedEyes" },
+            // 150 money is 20050090
             { 20050092, "Pie - Banana Cream" },
             { 20050093, "Pie - Key Lime" },
             { 20050094, "Pie - Blueberry" },
@@ -545,7 +604,7 @@ namespace BoboBayArchipelago
 
             object itemInGarden = ctor.Invoke(new object[] { itemSO, Vector4.zero, 0 });
 
-            var queueField = typeof(BobosWorld.Garden).GetField("_itemsToSpawnOnPlayer", flags);
+            var queueField = typeof(Garden).GetField("_itemsToSpawnOnPlayer", flags);
             object queue = queueField?.GetValue(garden);
             if (queue == null)
             {
@@ -562,16 +621,21 @@ namespace BoboBayArchipelago
 
             addMethod.Invoke(queue, new object[] { itemInGarden });
 
+            var spawnItemsMethod = typeof(Garden).GetMethod("SpawnItems", flags);
+            var spawnItemsRoutine = spawnItemsMethod?.Invoke(garden, null) as System.Collections.IEnumerator;
+            if (spawnItemsRoutine != null)
+                garden.StartCoroutine(spawnItemsRoutine);
+
             Plugin.Log?.LogInfo($"[Archipelago] Queued item to spawn on player: '{itemSO.name}' ({itemSO.LocalizedName})");
         }
 
         public static int ApplyFoodModToCurrentGarden()
         {
-            var garden = BobosWorld.Garden.Current;
+            var garden = Garden.Current;
             if (garden == null) return 0;
 
             var flags = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance;
-            var controllerListField = typeof(BobosWorld.Garden).GetField("_controllerList", flags);
+            var controllerListField = typeof(Garden).GetField("_controllerList", flags);
             var controllerList = controllerListField?.GetValue(garden) as System.Collections.IEnumerable;
             if (controllerList == null) return 0;
             
@@ -647,13 +711,18 @@ namespace BoboBayArchipelago
 
         public static void GrantProgressiveSagas()
         {
-            
-            ProgressiveSagasReceived++;
             Plugin.Log?.LogInfo($"[Archipelago] Progressive Sagas received ({ProgressiveSagasReceived}).");
+            ForceRefreshCompetitions();
         }
 
         public static void GrantReceivedItem(long itemID)
         {
+            if(PublicWorksItems.All.TryGetValue(itemID, out string pwpAssetName))
+            {
+                GrantPublicWorksProject(pwpAssetName);
+                return;
+            }
+
             if (ItemAssetNames.TryGetValue(itemID, out string assetName))
             {
                 SpawnItemByAsset(assetName);
@@ -664,15 +733,18 @@ namespace BoboBayArchipelago
             {
                 case ProgressiveCompetitionsId:
                     GrantProgressiveCompetitions();
+                    Plugin.Log?.LogInfo($"[Archipelago] Progressive Competitions received ({ProgressiveCompetitionsReceived}).");
                     break;
                 case ProgressiveSagasId:
                     GrantProgressiveSagas();
+                    Plugin.Log?.LogInfo($"[Archipelago] Progressive Sagas received ({ProgressiveSagasReceived}).");
                     break;
                 case BoboTicketId:
                     GrantBoboTicket();
+                    Plugin.Log?.LogInfo($"[Archipelago] Bobo Ticket received ({BoboTicketsReceived}/{BoboTicketsRequired}).");
                     break;
                 case 20050090:
-                    GrantMoney(75);
+                    GrantMoney(150);
                     break;
                 case 20050099:
                     Plugin.Log?.LogInfo("[Archipelago] VICTORY item received! Congratulations!");
@@ -682,45 +754,80 @@ namespace BoboBayArchipelago
                     break;
             }
         }
+
+        public static void GrantPublicWorksProject(string pwpAssetName)
+        {
+            ReceivedPWPItems.Add(pwpAssetName);
+
+            var collections = Resources.FindObjectsOfTypeAll<PublicWorksProjectCollectionSO>();
+            var purchasedCol = collections.FirstOrDefault(c => c.name == "Public Works Projects Purchased");
+            
+            if (purchasedCol == null) return;
+            var project = purchasedCol.collection.Keys.FirstOrDefault(p => p.name == pwpAssetName);
+            
+            if (project != null)
+            {
+                purchasedCol.collection[project] = true;
+                Plugin.Log?.LogInfo($"[Archipelago] Activated Public Works: {project.titleKey}");
+            }
+        }
     }
     public static class ArchipelagoManager
     {
         private static ArchipelagoSession _session;
+        private static readonly ConcurrentQueue<long> PendingItems = new ConcurrentQueue<long>();
+        private static volatile bool _pendingSync;
+        public static ArchipelagoSession Session => _session;
         public static bool IsInBay { get;set; }
 
-        public static void ProcessPendingItems()
+        public static int CountReceived(long itemId)
         {
-            if (_session == null) return;
-
-            while (_session.Items.Any())
-            {
-                var item = _session.Items.DequeueItem();
-                string itemName = _session.Items.GetItemName(item.ItemId) ?? $"Item {item.ItemId}";
-                try
-                {
-                    Plugin.Log?.LogInfo($"[Archipelago] Processing received item, id={item.ItemId}");
-                    ArchipelagoItemHandler.GrantReceivedItem(item.ItemId);
-                }
-                catch (Exception ex)
-                {
-                    Plugin.Log?.LogError($"[Archipelago] Exception while processing item {item.ItemId}: {ex}");
-                }
-            }
+            return _session?.Items.AllItemsReceived.Count(i => i.ItemId == itemId) ?? 0;
         }
 
         private static void OnItemReceived(ReceivedItemsHelper helper)
         {
+            _pendingSync = true;
+
             while (helper.AllItemsReceived.Count > ArchipelagoItemHandler.CurrentItemIndex)
             {
                 var item = helper.AllItemsReceived[(int)ArchipelagoItemHandler.CurrentItemIndex];
                 
                 Plugin.Log?.LogInfo($"[Archipelago] Processing item ID {item.ItemId} at index {ArchipelagoItemHandler.CurrentItemIndex}");
-                ArchipelagoItemHandler.GrantReceivedItem(item.ItemId);
+                PendingItems.Enqueue(item.ItemId);
 
                 // Increment local index and save back to Archipelago server storage
                 ArchipelagoItemHandler.CurrentItemIndex++;
                 _session.DataStorage[Scope.Slot, "new_item_index"] = ArchipelagoItemHandler.CurrentItemIndex;
             }
+        }
+
+        public static void RequestSync()
+        {
+            _pendingSync = true;
+        }
+
+        public static void ProcessPendingSync()
+        {
+            if (!_pendingSync) return;
+
+            _pendingSync = false;
+            ArchipelagoItemHandler.SyncItemsFromServer();
+        }
+
+        public static void ProcessPendingItems()
+        {
+            if (!IsInBay) return;
+
+            while (PendingItems.TryDequeue(out long itemId))
+            {
+                ArchipelagoItemHandler.GrantReceivedItem(itemId);
+            }
+        }
+
+        public static bool IsLocationChecked(long locationId)
+        {
+            return _session?.Locations?.AllLocationsChecked?.Contains(locationId) ?? false;
         }
 
         public static void SendGoalComplete()
@@ -759,25 +866,6 @@ namespace BoboBayArchipelago
 
             Plugin.Log?.LogWarning($"[Archipelago] Unrecognized threshold payload type: {raw.GetType().FullName}");
             return result;
-        }
-
-        private static void DumpSeedIdentifierCandidates(LoginSuccessful success)
-        {
-            var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
-            void DumpMembers(object obj, string label)
-            {
-                if (obj == null) { Plugin.Log?.LogWarning($"[APDebug] {label} is null."); return; }
-                foreach (var p in obj.GetType().GetProperties(flags))
-                {
-                    if (p.Name.IndexOf("seed", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    try { Plugin.Log?.LogInfo($"[APDebug] {label}.{p.Name} = {p.GetValue(obj)}"); }
-                    catch (Exception ex) { Plugin.Log?.LogInfo($"[APDebug] {label}.{p.Name} threw: {ex.Message}"); }
-                }
-            }
-
-            DumpMembers(success, "LoginSuccessful");
-            DumpMembers(_session?.RoomState, "RoomState");
         }
 
         public static bool IsConnected { get; private set; } = false;
@@ -821,8 +909,6 @@ namespace BoboBayArchipelago
                             Plugin.Log?.LogInfo("[Archipelago] No stored item index found; starting at index 0.");
                         }
 
-                        string currentSeed = _session.RoomState?.Seed ?? "";
-                        ArchipelagoItemHandler.BindProgressEntriesForSeed(currentSeed);
                         if (success.SlotData.TryGetValue("goal_asset_name", out object goalObj))
                         {
                             ArchipelagoItemHandler.GoalAssetName = goalObj.ToString() ?? "BigJam_Race_D";
@@ -859,7 +945,7 @@ namespace BoboBayArchipelago
 
                         _session.Items.ItemReceived += OnItemReceived;
 
-                        ArchipelagoItemHandler.ForceRefreshCompetitions();
+                        RequestSync();
                     }
                     else
                     {
