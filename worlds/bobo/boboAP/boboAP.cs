@@ -6,6 +6,7 @@ using System.Linq;
 using Archipelago.MultiClient.Net;
 using Archipelago.MultiClient.Net.Packets;
 using Archipelago.MultiClient.Net.Enums;
+using Archipelago.MultiClient.Net.Helpers;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -240,8 +241,6 @@ namespace BoboBayArchipelago
             SlotNameEntry = Config.Bind("Archipelago", "SlotName", "Player", "Slot name registered in the Archipelago multiworld.");
             PasswordEntry = Config.Bind("Archipelago", "Password", "", "Password for the room (if required).");
             AutoConnectEntry = Config.Bind("Archipelago", "AutoConnect", false, "Automatically attempt connection on startup.");
-            ArchipelagoItemHandler.ProgressiveCompetitionsReceivedEntry = Config.Bind("Archipelago", "ProgressiveCompetitionsReceived", 0,
-                "Internal: how many Progressive Competitions items received so far.");
             LastSeedEntry = Config.Bind("Archipelago", "LastSeed", "", "Internal: tracks the last connected seed, to auto-reset progress counters on a new seed.");
             DebugLoggingEnabled = Config.Bind("Archipelago", "DebugLogging", false,
                 "Enable logging (competition/saga rosters, unlock checks). Off by default. I used this in development mainly, didn't want to get rid of it.");
@@ -331,9 +330,10 @@ namespace BoboBayArchipelago
 
     public static class ArchipelagoItemHandler
     {
-        public static ConfigEntry<int> BoboTicketsReceivedEntry;
-        public static ConfigEntry<int> ProgressiveCompetitionsReceivedEntry;
-        public static ConfigEntry<int> ProgressiveSagasReceivedEntry;
+        public static long CurrentItemIndex { get; set; } = 0;
+        public static int BoboTicketsReceived { get; set; } = 0;
+        public static int ProgressiveCompetitionsReceived { get; set; } = 0;
+        public static int ProgressiveSagasReceived { get; set; } = 0;
 
         public static ConfigEntry<bool> DRankUnlockedEntry, 
             CRankUnlockedEntry, 
@@ -350,17 +350,13 @@ namespace BoboBayArchipelago
         public static bool BRankUnlocked => BRankUnlockedEntry?.Value ?? false;
         public static bool ARankUnlocked => ARankUnlockedEntry?.Value ?? false;
         public static bool SRankUnlocked => SRankUnlockedEntry?.Value ?? false;
-        public static int BoboTicketsReceived => BoboTicketsReceivedEntry?.Value ?? 0;
         public static int BoboTicketsRequired => Plugin.BoboTicketsRequiredEntry?.Value ?? 3;
         public static float CurrentSnackMultiplier { get; private set; } = 1f;
         public static bool UnlimitedSnacksEnabled { get; private set; } = false;
         private static readonly int BaseMinStat = Common.DEFAULT_MINSTATUPDATE;
         private static readonly int BaseMaxStat = Common.DEFAULT_MAXSTATUPDATE;
         public static Dictionary<string, int> SagaUnlockThresholds = new Dictionary<string, int>();
-        public static int ProgressiveSagasReceived => ProgressiveSagasReceivedEntry?.Value ?? 0;
-
         public static Dictionary<string, int> CompetitionUnlockThresholds = new Dictionary<string, int>();
-        public static int ProgressiveCompetitionsReceived => ProgressiveCompetitionsReceivedEntry?.Value ?? 0;
         public static string GoalAssetName = "BigJam_Race_D";
         public static string GoalSagaName = "";
         public static void BindProgressEntriesForSeed(string seed)
@@ -369,12 +365,6 @@ namespace BoboBayArchipelago
             if (string.IsNullOrEmpty(safeSeed)) safeSeed = "unknown";
             string section = "Progress_" + safeSeed;
 
-            BoboTicketsReceivedEntry = Plugin.ConfigFile.Bind(section, "BoboTicketsReceived", 0,
-                "Progress for this specific seed — how many Bobo Tickets received.");
-            ProgressiveCompetitionsReceivedEntry = Plugin.ConfigFile.Bind(section, "ProgressiveCompetitionsReceived", 0,
-                "Progress for this specific seed — how many Progressive Competitions received.");
-            ProgressiveSagasReceivedEntry = Plugin.ConfigFile.Bind(section, "ProgressiveSagasReceived", 0,
-                "Progress for this specific seed — how many Progressive Sagas received.");
             ItemsGrantedIndexEntry = Plugin.ConfigFile.Bind(section, "ItemsGrantedIndex", 0,
                 "Progress for this specific seed — count of AP items already granted.");
 
@@ -385,16 +375,13 @@ namespace BoboBayArchipelago
         {
             // want to convert from unlocking competitions by rank
             // to unlocking sets of competitions to stagger the progression
-            if (ProgressiveCompetitionsReceivedEntry != null)
-                ProgressiveCompetitionsReceivedEntry.Value++;
-
+            // ignore previous comments i did it yay
+            ProgressiveCompetitionsReceived++;
             Plugin.Log?.LogInfo($"[Archipelago] Progressive Competitions received ({ProgressiveCompetitionsReceived}).");
         }
         public static void GrantBoboTicket()
         {
-            if (BoboTicketsReceivedEntry != null)
-                BoboTicketsReceivedEntry.Value++;
-
+            BoboTicketsReceived++;
             Plugin.Log?.LogInfo($"[Archipelago] Bobo Ticket received ({BoboTicketsReceived}/{BoboTicketsRequired}).");
         }
         public static void SetBoboTicketsRequired(int required)
@@ -660,8 +647,8 @@ namespace BoboBayArchipelago
 
         public static void GrantProgressiveSagas()
         {
-            if (ProgressiveSagasReceivedEntry != null)
-                ProgressiveSagasReceivedEntry.Value++;
+            
+            ProgressiveSagasReceived++;
             Plugin.Log?.LogInfo($"[Archipelago] Progressive Sagas received ({ProgressiveSagasReceived}).");
         }
 
@@ -718,6 +705,21 @@ namespace BoboBayArchipelago
                 {
                     Plugin.Log?.LogError($"[Archipelago] Exception while processing item {item.ItemId}: {ex}");
                 }
+            }
+        }
+
+        private static void OnItemReceived(ReceivedItemsHelper helper)
+        {
+            while (helper.AllItemsReceived.Count > ArchipelagoItemHandler.CurrentItemIndex)
+            {
+                var item = helper.AllItemsReceived[(int)ArchipelagoItemHandler.CurrentItemIndex];
+                
+                Plugin.Log?.LogInfo($"[Archipelago] Processing item ID {item.ItemId} at index {ArchipelagoItemHandler.CurrentItemIndex}");
+                ArchipelagoItemHandler.GrantReceivedItem(item.ItemId);
+
+                // Increment local index and save back to Archipelago server storage
+                ArchipelagoItemHandler.CurrentItemIndex++;
+                _session.DataStorage[Scope.Slot, "new_item_index"] = ArchipelagoItemHandler.CurrentItemIndex;
             }
         }
 
@@ -807,6 +809,18 @@ namespace BoboBayArchipelago
                         IsConnected = true;
                         UpdateStatus($"Connected to {host}");
 
+                        try
+                        {
+                            ArchipelagoItemHandler.CurrentItemIndex =
+                                _session.DataStorage[Scope.Slot, "new_item_index"].To<long>();
+                        }
+                        catch (ArgumentException)
+                        {
+                            ArchipelagoItemHandler.CurrentItemIndex = 0;
+                            _session.DataStorage[Scope.Slot, "new_item_index"] = 0L;
+                            Plugin.Log?.LogInfo("[Archipelago] No stored item index found; starting at index 0.");
+                        }
+
                         string currentSeed = _session.RoomState?.Seed ?? "";
                         ArchipelagoItemHandler.BindProgressEntriesForSeed(currentSeed);
                         if (success.SlotData.TryGetValue("goal_asset_name", out object goalObj))
@@ -842,6 +856,8 @@ namespace BoboBayArchipelago
                             ArchipelagoItemHandler.SagaUnlockThresholds = ParseThresholds(sagaThresholdsObj);
                             Plugin.Log?.LogInfo($"[Archipelago] Loaded {ArchipelagoItemHandler.SagaUnlockThresholds.Count} saga unlock threshold(s).");
                         }
+
+                        _session.Items.ItemReceived += OnItemReceived;
 
                         ArchipelagoItemHandler.ForceRefreshCompetitions();
                     }

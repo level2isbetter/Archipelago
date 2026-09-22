@@ -10,8 +10,6 @@ if TYPE_CHECKING:
 def did_include_extra_locations(world: "BoboWorld") -> bool:
     return bool(world.options.ExtraLocations)
 
-# This is used by ap and in Items.py
-# Theres a multitude of reasons to need to grab how many locations there are
 def get_total_locations(world: "BoboWorld") -> int:
     # This is the total that we'll keep updating as we count how many locations there are
     total = 0
@@ -43,9 +41,6 @@ def is_valid_location(world: "BoboWorld", name) -> bool:
             return False
     return True
 
-# Heres where you do the next fun part of listing out all those locations
-# Its a lot
-# My advice, zone out for half an hour listening to music and hope you wake up to a completed list
 bobo_locations = {
     # E Rank
     "Baby's First Steps (Race, E)": LocData(20050100, "Competitions", "BabysFirstSteps_Race_E", "E"),

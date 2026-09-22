@@ -87,8 +87,13 @@ class BoboOptions(PerGameCommonOptions):
     CompetitionsPerUnlock:       CompetitionsPerUnlock
     SagasPerUnlock:              SagasPerUnlock
 
-# This is where you organize your options
-# Its entirely up to you how you want to organize it
 bobo_option_groups: Dict[str, List[Any]] = {
-    "General Options": [Goal, BoboTicketsRequired, SnackMultiplier, UnlimitedSnacks, ExtraLocations, CompetitionsPerUnlock, SagasPerUnlock],
+    "General Options": [Goal, 
+        BoboTicketsRequired, 
+        SnackMultiplier, 
+        UnlimitedSnacks, 
+        ExtraLocations, 
+        CompetitionsPerUnlock, 
+        SagasPerUnlock
+    ],
 }

@@ -12,16 +12,13 @@ from .Options import get_goal_name
 if TYPE_CHECKING:
     from . import BoboWorld
 
-# If you're curious about the -> List[Item] that is a syntax to make sure you return the correct variable type
-# In this instance we're saying we only want to return a list of items
-# You'll see a bunch of other examples of this in other functions
-# It's main purpose is to protect yourself from yourself
 def create_itempool(world: "BoboWorld") -> List[Item]:
     itempool: List[Item] = []
 
     goal_asset = get_goal_name(world)
     goal_event_name = "Beat Big Jam" if goal_asset == "BigJam_Race_D" else "Beat Power Gary"
-    # Add all unique items (excluding Victory, which is placed on Beat Big Jam)
+
+    # Add all unique items (excluding victory which is on the goal competition)
     for name, data in bobo_items.items():
         if name not in ("Victory", "Bobo Ticket", "Progressive Competitions"):
             itempool.append(create_item(world, name))
@@ -40,11 +37,11 @@ def create_itempool(world: "BoboWorld") -> List[Item]:
     max_saga_batch = max(saga_thresholds.values()) if saga_thresholds else 0
     itempool += create_multiple_items(world, "Progressive Sagas", max_saga_batch, ItemClassification.progression)
 
-    # Place victory at the final location
+    # place victory at the goal competition
     victory = create_item(world, "Victory")
     world.multiworld.get_location(goal_event_name, world.player).place_locked_item(victory)
 
-    # Fill remainder of locations with junk
+    # fill remainder of locations with junk
     needed_junk = get_total_locations(world) - len(itempool) - 1
     if needed_junk > 0:
         itempool += create_junk_items(world, needed_junk)
@@ -67,7 +64,7 @@ def create_multiple_items(world: "BoboWorld", name: str, count: int,
 
     return itemlist
 
-# Finally, where junk items are created
+# junk items
 def create_junk_items(world: "BoboWorld", count: int) -> List[Item]:
     junk_pool: List[Item] = []
     junk_names = list(junk_weights.keys())
@@ -79,7 +76,6 @@ def create_junk_items(world: "BoboWorld", count: int) -> List[Item]:
 
     return junk_pool
 
-# Items from Bobo Bay
 bobo_items = {
     # Progression
     "Bobo Ticket":           ItemData(20050000, ItemClassification.progression),
@@ -164,7 +160,7 @@ bobo_items = {
     "Victory":               ItemData(20050099, ItemClassification.progression),
 }
 
-# Items used to fill empty slots
+# junk item stuff again
 junk_items = {
     "75 money":                    ItemData(20050090, ItemClassification.filler, 0),
     "Gumball (Concerned Eyes)":    ItemData(20050091, ItemClassification.filler, 0),
