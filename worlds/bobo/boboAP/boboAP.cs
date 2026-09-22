@@ -12,6 +12,7 @@ using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityAtoms.BaseAtoms;
 
 namespace BoboBayArchipelago
 {
@@ -71,13 +72,6 @@ namespace BoboBayArchipelago
                 {
                     forceAvailable = ArchipelagoItemHandler.ProgressiveCompetitionsReceived >= required;
                 }
-                else
-                {
-                    forceAvailable = competition.rank == Grade.E
-                        || (competition.rank == Grade.D && ArchipelagoItemHandler.DRankUnlocked);
-                }
-
-                if (!forceAvailable) continue;
 
                 competition.dayMonday = true;
                 competition.dayTuesday = true;
@@ -203,6 +197,51 @@ namespace BoboBayArchipelago
             }
         }
     }
+
+    [HarmonyPatch(typeof(UIPublicWorksPurchaseConfirmation), "Yes")]
+    public static class PublicWorksPurchasePatch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(UIPublicWorksPurchaseConfirmation __instance)
+        {
+            // 1. Get the PublicWorksProjectSO being purchased via reflection/Traverse
+            var project = Traverse.Create(__instance).Field("_publicWorksProject").GetValue<PublicWorksProjectSO>();
+            if (project == null) return true;
+            
+            // 2. Map project.name (e.g. "PWP_FixBenches") to Archipelago Location ID
+            if (PublicWorksLocations.All.TryGetValue(project.name, out long locationID))
+            {
+                ArchipelagoManager.CheckLocation(locationID);
+                Plugin.Log?.LogInfo($"[AP] Checked Public Works location: {project.name} ({locationID})");
+            }
+
+            // 3. Mark that this terminal check was completed so it stays hidden in the UI
+            ArchipelagoItemHandler.MarkPWPCheckCompleted(project.name);
+
+            // 4. Deduct Public Fund money normally
+            var fundField = Traverse.Create(__instance).Field("_publicFund").GetValue<IntVariable>();
+            int cost = project.cost != null ? project.cost.Value : Common.DEFAULT_PWPCOST;
+            fundField?.Subtract(cost);
+
+            // 5. Play sound and update UI selection
+            Traverse.Create(__instance).Field("_purchaseSound").Method("Play2D").GetValue();
+            var uiPWP = Traverse.Create(__instance).Field("_uiPublicWorks").GetValue<UIPublicWorksProjects>();
+            uiPWP?.RemoveRecord(project);
+            __instance.gameObject.SetActive(false);
+            // Return false so vanilla ShopManager doesn't immediately schedule building it!
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(SaveSystem), "LoadData")]
+    public static class SaveSystemLoadDataPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            ArchipelagoItemHandler.SyncItemsFromServer();
+        }
+    }
     
     [HarmonyPatch(typeof(GardenBoboAITree))]
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
@@ -224,6 +263,7 @@ namespace BoboBayArchipelago
         public static ConfigEntry<int> BoboTicketsRequiredEntry;
         public static ConfigEntry<string> LastSeedEntry;
         public static ConfigEntry<bool> DebugLoggingEnabled;
+        public static ConfigEntry<string> RecentSeedsEntry;
 
         private static bool _foodModPending = false;
         
@@ -245,6 +285,8 @@ namespace BoboBayArchipelago
             LastSeedEntry = Config.Bind("Archipelago", "LastSeed", "", "Internal: tracks the last connected seed, to auto-reset progress counters on a new seed.");
             DebugLoggingEnabled = Config.Bind("Archipelago", "DebugLogging", false,
                 "Enable logging (competition/saga rosters, unlock checks). Off by default. I used this in development mainly, didn't want to get rid of it.");
+            RecentSeedsEntry = Config.Bind("Archipelago", "RecentSeeds", "",
+                "Internal: tracks recently used seed sections for cleanup.");
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
 
@@ -268,10 +310,6 @@ namespace BoboBayArchipelago
 
         private void Update()
         {
-            if (ArchipelagoManager.IsConnected && ArchipelagoManager.IsInBay)
-            {
-                ArchipelagoManager.ProcessPendingItems();
-            }
 
             if (_foodModPending && ArchipelagoManager.IsInBay){
                 if (ArchipelagoItemHandler.ApplyFoodModToCurrentGarden() > 0){
@@ -331,26 +369,30 @@ namespace BoboBayArchipelago
 
     public static class ArchipelagoItemHandler
     {
+<<<<<<< Updated upstream
         public static ConfigEntry<int> BoboTicketsReceivedEntry;
         public static ConfigEntry<int> ProgressiveCompetitionsReceivedEntry;
         public static ConfigEntry<int> ProgressiveSagasReceivedEntry;
+=======
+        public static long CurrentItemIndex { get; set; } = 0;
+        public static int BoboTicketsReceived => ArchipelagoManager.CountReceived(BoboTicketId);
+        public static int ProgressiveCompetitionsReceived => ArchipelagoManager.CountReceived(ProgressiveCompetitionsId);
+        public static int ProgressiveSagasReceived => ArchipelagoManager.CountReceived(ProgressiveSagasId);
+>>>>>>> Stashed changes
 
-        public static ConfigEntry<bool> DRankUnlockedEntry, 
-            CRankUnlockedEntry, 
-            BRankUnlockedEntry, 
-            ARankUnlockedEntry, 
-            SRankUnlockedEntry;
         public static ConfigEntry<int> ItemsGrantedIndexEntry;
-        public const long DRankUnlockItemId = 20050050;
         public const long BoboTicketId = 20050000;
         public const long ProgressiveCompetitionsId = 20050001;
         public const long ProgressiveSagasId = 20050002;
+<<<<<<< Updated upstream
         public static bool DRankUnlocked => DRankUnlockedEntry?.Value ?? false;
         public static bool CRankUnlocked => CRankUnlockedEntry?.Value ?? false;
         public static bool BRankUnlocked => BRankUnlockedEntry?.Value ?? false;
         public static bool ARankUnlocked => ARankUnlockedEntry?.Value ?? false;
         public static bool SRankUnlocked => SRankUnlockedEntry?.Value ?? false;
         public static int BoboTicketsReceived => BoboTicketsReceivedEntry?.Value ?? 0;
+=======
+>>>>>>> Stashed changes
         public static int BoboTicketsRequired => Plugin.BoboTicketsRequiredEntry?.Value ?? 3;
         public static float CurrentSnackMultiplier { get; private set; } = 1f;
         public static bool UnlimitedSnacksEnabled { get; private set; } = false;
@@ -360,12 +402,19 @@ namespace BoboBayArchipelago
         public static int ProgressiveSagasReceived => ProgressiveSagasReceivedEntry?.Value ?? 0;
 
         public static Dictionary<string, int> CompetitionUnlockThresholds = new Dictionary<string, int>();
+<<<<<<< Updated upstream
         public static int ProgressiveCompetitionsReceived => ProgressiveCompetitionsReceivedEntry?.Value ?? 0;
+=======
+        public static HashSet<string> CompletedPWPChecks { get; } = new HashSet<string>();
+        public static HashSet<string> ReceivedPWPItems { get; } = new HashSet<string>();
+>>>>>>> Stashed changes
         public static string GoalAssetName = "BigJam_Race_D";
         public static string GoalSagaName = "";
+        private const int MaxRememberedSeeds = 5;
+
         public static void BindProgressEntriesForSeed(string seed)
         {
-            string safeSeed = new string(seed.Where(c => char.IsLetterOrDigit(c)).ToArray());
+            string safeSeed = new string(seed.Where(char.IsLetterOrDigit).ToArray());
             if (string.IsNullOrEmpty(safeSeed)) safeSeed = "unknown";
             string section = "Progress_" + safeSeed;
 
@@ -378,23 +427,115 @@ namespace BoboBayArchipelago
             ItemsGrantedIndexEntry = Plugin.ConfigFile.Bind(section, "ItemsGrantedIndex", 0,
                 "Progress for this specific seed — count of AP items already granted.");
 
+            PruneOldSeeds(section);
+
             Plugin.Log?.LogInfo($"[Archipelago] Bound progress entries for seed section '{section}'.");
+        }
+
+        private static void PruneOldSeeds(string currentSection)
+        {
+            var order = (Plugin.RecentSeedsEntry?.Value ?? "").Split(',').Where(s => s.Length > 0).ToList();
+            order.RemoveAll(s => s == currentSection);
+            order.Insert(0, currentSection);
+
+            while (order.Count > MaxRememberedSeeds)
+            {
+                var drop = order[order.Count - 1];
+                order.RemoveAt(order.Count - 1);
+                foreach (var key in Plugin.ConfigFile.Keys.Where(k => k.Section == drop).ToList())
+                    Plugin.ConfigFile.Remove(key);
+            }
+
+            if (Plugin.RecentSeedsEntry != null) Plugin.RecentSeedsEntry.Value = string.Join(",", order);
+            Plugin.ConfigFile.Save();
+        }
+
+        public static void MarkPWPCheckCompleted(string pwpAssetName)
+        {
+            CompletedPWPChecks.Add(pwpAssetName);
+            Plugin.Log?.LogInfo($"[Archipelago] Public Works check completed: {pwpAssetName}");
+        }
+
+        
+        public static bool IsPWPCheckCompleted(string pwpAssetName)
+        {
+            if (CompletedPWPChecks.Contains(pwpAssetName)) return true;
+            // Also check if the server already marked this location as checked
+            if (PublicWorksLocations.All.TryGetValue(pwpAssetName, out long locId))
+            {
+                return ArchipelagoManager.IsLocationChecked(locId);
+            }
+            return false;
+        }
+
+        public static void ResetAndSyncPublicWorks()
+        {
+            var collections = Resources.FindObjectsOfTypeAll<PublicWorksProjectCollectionSO>();
+            var purchasedCol = collections.FirstOrDefault(c => c.name == "Public Works Projects Purchased");
+            if (purchasedCol == null || purchasedCol.collection == null) return;
+            // 1. Re-lock all public works in the save
+            var keys = purchasedCol.collection.Keys.ToList();
+            foreach (var key in keys)
+            {
+                purchasedCol.collection[key] = false;
+            }
+            // 2. Clear any vanilla pending purchases
+            var toPurchaseLists = Resources.FindObjectsOfTypeAll<UnityAtoms.BobosWorld.PublicWorksProjectSOValueList>();
+            var toPurchase = toPurchaseLists.FirstOrDefault(l => l.name == "Public Works Projects TOPurchase");
+            toPurchase?.Clear();
+            // 3. Re-enable ONLY the projects received from Archipelago
+            foreach (var pwpName in ReceivedPWPItems)
+            {
+                var project = keys.FirstOrDefault(k => k.name == pwpName);
+                if (project != null)
+                {
+                    purchasedCol.collection[project] = true;
+                }
+            }
+            Plugin.Log?.LogInfo($"[Archipelago] Re-locked save's public works. Synced {ReceivedPWPItems.Count} AP-unlocked project(s).");
+        }
+
+        public static void SyncItemsFromServer()
+        {
+            if (!ArchipelagoManager.IsConnected || ArchipelagoManager.Session == null) return;
+            var allItems = ArchipelagoManager.Session.Items.AllItemsReceived;
+
+            ReceivedPWPItems.Clear();
+            foreach (var item in allItems)
+            {
+                if (PublicWorksItems.All.TryGetValue(item.ItemId, out string pwpAssetName))
+                {
+                    ReceivedPWPItems.Add(pwpAssetName);
+                }
+            }
+            
+            ResetAndSyncPublicWorks();
+            ForceRefreshCompetitions();
+            Plugin.Log?.LogInfo($"[Archipelago] Full Sync Complete: Comps={ProgressiveCompetitionsReceived}, Sagas={ProgressiveSagasReceived}, Tickets={BoboTicketsReceived}, PWPs={ReceivedPWPItems.Count}");
         }
 
         public static void GrantProgressiveCompetitions()
         {
             // want to convert from unlocking competitions by rank
             // to unlocking sets of competitions to stagger the progression
+<<<<<<< Updated upstream
             if (ProgressiveCompetitionsReceivedEntry != null)
                 ProgressiveCompetitionsReceivedEntry.Value++;
 
+=======
+            // ignore previous comments i did it yay
+>>>>>>> Stashed changes
             Plugin.Log?.LogInfo($"[Archipelago] Progressive Competitions received ({ProgressiveCompetitionsReceived}).");
+            ForceRefreshCompetitions();
         }
         public static void GrantBoboTicket()
         {
+<<<<<<< Updated upstream
             if (BoboTicketsReceivedEntry != null)
                 BoboTicketsReceivedEntry.Value++;
 
+=======
+>>>>>>> Stashed changes
             Plugin.Log?.LogInfo($"[Archipelago] Bobo Ticket received ({BoboTicketsReceived}/{BoboTicketsRequired}).");
         }
         public static void SetBoboTicketsRequired(int required)
@@ -509,8 +650,7 @@ namespace BoboBayArchipelago
 
 
             // Junk items
-            // 75 money is 20050090
-            { 20050091, "Gumball_ConcernedEyes" },
+            // 150 money is 20050090
             { 20050092, "Pie - Banana Cream" },
             { 20050093, "Pie - Key Lime" },
             { 20050094, "Pie - Blueberry" },
@@ -660,13 +800,23 @@ namespace BoboBayArchipelago
 
         public static void GrantProgressiveSagas()
         {
+<<<<<<< Updated upstream
             if (ProgressiveSagasReceivedEntry != null)
                 ProgressiveSagasReceivedEntry.Value++;
+=======
+>>>>>>> Stashed changes
             Plugin.Log?.LogInfo($"[Archipelago] Progressive Sagas received ({ProgressiveSagasReceived}).");
+            ForceRefreshCompetitions();
         }
 
         public static void GrantReceivedItem(long itemID)
         {
+            if(PublicWorksItems.All.TryGetValue(itemID, out string pwpAssetName))
+            {
+                GrantPublicWorksProject(pwpAssetName);
+                return;
+            }
+
             if (ItemAssetNames.TryGetValue(itemID, out string assetName))
             {
                 SpawnItemByAsset(assetName);
@@ -677,15 +827,18 @@ namespace BoboBayArchipelago
             {
                 case ProgressiveCompetitionsId:
                     GrantProgressiveCompetitions();
+                    Plugin.Log?.LogInfo($"[Archipelago] Progressive Competitions received ({ProgressiveCompetitionsReceived}).");
                     break;
                 case ProgressiveSagasId:
                     GrantProgressiveSagas();
+                    Plugin.Log?.LogInfo($"[Archipelago] Progressive Sagas received ({ProgressiveSagasReceived}).");
                     break;
                 case BoboTicketId:
                     GrantBoboTicket();
+                    Plugin.Log?.LogInfo($"[Archipelago] Bobo Ticket received ({BoboTicketsReceived}/{BoboTicketsRequired}).");
                     break;
                 case 20050090:
-                    GrantMoney(75);
+                    GrantMoney(150);
                     break;
                 case 20050099:
                     Plugin.Log?.LogInfo("[Archipelago] VICTORY item received! Congratulations!");
@@ -695,10 +848,28 @@ namespace BoboBayArchipelago
                     break;
             }
         }
+
+        public static void GrantPublicWorksProject(string pwpAssetName)
+        {
+            ReceivedPWPItems.Add(pwpAssetName);
+
+            var collections = Resources.FindObjectsOfTypeAll<PublicWorksProjectCollectionSO>();
+            var purchasedCol = collections.FirstOrDefault(c => c.name == "Public Works Projects Purchased");
+            
+            if (purchasedCol == null) return;
+            var project = purchasedCol.collection.Keys.FirstOrDefault(p => p.name == pwpAssetName);
+            
+            if (project != null)
+            {
+                purchasedCol.collection[project] = true;
+                Plugin.Log?.LogInfo($"[Archipelago] Activated Public Works: {project.titleKey}");
+            }
+        }
     }
     public static class ArchipelagoManager
     {
         private static ArchipelagoSession _session;
+        public static ArchipelagoSession Session => _session;
         public static bool IsInBay { get;set; }
 
         public static void ProcessPendingItems()
@@ -721,6 +892,36 @@ namespace BoboBayArchipelago
             }
         }
 
+<<<<<<< Updated upstream
+=======
+        public static int CountReceived(long itemId)
+        {
+            return _session?.Items.AllItemsReceived.Count(i => i.ItemId == itemId) ?? 0;
+        }
+
+        private static void OnItemReceived(ReceivedItemsHelper helper)
+        {
+            ArchipelagoItemHandler.SyncItemsFromServer();
+
+            while (helper.AllItemsReceived.Count > ArchipelagoItemHandler.CurrentItemIndex)
+            {
+                var item = helper.AllItemsReceived[(int)ArchipelagoItemHandler.CurrentItemIndex];
+                
+                Plugin.Log?.LogInfo($"[Archipelago] Processing item ID {item.ItemId} at index {ArchipelagoItemHandler.CurrentItemIndex}");
+                ArchipelagoItemHandler.GrantReceivedItem(item.ItemId);
+
+                // Increment local index and save back to Archipelago server storage
+                ArchipelagoItemHandler.CurrentItemIndex++;
+                _session.DataStorage[Scope.Slot, "new_item_index"] = ArchipelagoItemHandler.CurrentItemIndex;
+            }
+        }
+
+        public static bool IsLocationChecked(long locationId)
+        {
+            return _session?.Locations?.AllLocationsChecked?.Contains(locationId) ?? false;
+        }
+
+>>>>>>> Stashed changes
         public static void SendGoalComplete()
         {
             if (_session == null || !IsConnected)
@@ -843,7 +1044,13 @@ namespace BoboBayArchipelago
                             Plugin.Log?.LogInfo($"[Archipelago] Loaded {ArchipelagoItemHandler.SagaUnlockThresholds.Count} saga unlock threshold(s).");
                         }
 
+<<<<<<< Updated upstream
                         ArchipelagoItemHandler.ForceRefreshCompetitions();
+=======
+                        _session.Items.ItemReceived += OnItemReceived;
+
+                        ArchipelagoItemHandler.SyncItemsFromServer();
+>>>>>>> Stashed changes
                     }
                     else
                     {

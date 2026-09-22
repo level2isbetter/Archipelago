@@ -277,6 +277,34 @@ saga_locations = {
     "See The Hero (Race, A)":               LocData(20050376, "Competitions", "Race_A_SeeTheHero", "A"),
 }
 
+pubworks_locations = {
+    "Public Works - Fix Benches":                       LocData(20050700, "Public Works", "PWP_FixBenches"),
+    "Public Works - Basketball Hoop":                   LocData(20050701, "Public Works", "PWP_BasketballHoop"),
+    "Public Works - Bench in Garden":                   LocData(20050702, "Public Works", "PWP_BenchInGarden"),
+    "Public Works - Bobo Copy Machine":                 LocData(20050703, "Public Works", "PWP_BoboCopier"),
+    "Public Works - Bobo Full Stat Viewer":             LocData(20050704, "Public Works", "PWP_BoboFullStatViewer"),
+    "Public Works - Boombox":                           LocData(20050705, "Public Works", "PWP_Boombox"),
+    "Public Works - Additional Camps":                  LocData(20050706, "Public Works", "PWP_CampUpgrade"),
+    "Public Works - Cave Excursion":                    LocData(20050707, "Public Works", "PWP_Excursion_Caves"),
+    "Public Works - Deep Forest Excursion":             LocData(20050708, "Public Works", "PWP_Excursion_DeepForest"),
+    "Public Works - Gumball Machine":                   LocData(20050709, "Public Works", "PWP_GumballMachine"),
+    "Public Works - Increase Competitions Per Day":     LocData(20050710, "Public Works", "PWP_IncreasedCompetitionsPerDay"),
+    "Public Works - Increase Item Storage in Bayfarer": LocData(20050711, "Public Works", "PWP_IncreasedItemStorageInBoat"),
+    "Public Works - Soccer Ball":                       LocData(20050712, "Public Works", "PWP_SoccerBall"),
+    "Public Works - Storage Shed":                      LocData(20050713, "Public Works", "PWP_StorageShed"),
+    "Public Works - Toy Blocks":                        LocData(20050714, "Public Works", "PWP_ToyBlocks"),
+    "Public Works - Tree Farm Excursion":               LocData(20050715, "Public Works", "PWP_Excursion_TreeFarm"),
+    "Public Works - TV":                                LocData(20050716, "Public Works", "PWP_TV"),
+    "Public Works - Vending Machine":                   LocData(20050717, "Public Works", "PWP_VendingMachine"),
+    "Public Works - Secret Garden":                     LocData(20050718, "Public Works", "PWP_SecretGarden"),
+    "Public Works - Restaurant":                        LocData(20050719, "Public Works", "PWP_Restaurant"),
+    "Public Works - Item Shop":                         LocData(20050720, "Public Works", "PWP_ItemShop"),
+    "Public Works - Animal Cracker Shop":               LocData(20050721, "Public Works", "PWP_AnimalCrackerShop"),
+    "Public Works - Costume Shop":                      LocData(20050722, "Public Works", "PWP_CostumeShop"),
+    "Public Works - Original Bobo Statue":              LocData(20050723, "Public Works", "PWP_OriginalBoboStatue"),
+    "Public Works - Fairy Garden":                      LocData(20050724, "Public Works", "PWP_SkyGarden"),
+}
+
 extra_locations = {}
 
 event_locations = {
@@ -287,6 +315,7 @@ event_locations = {
 location_table = {
     **bobo_locations,
     **saga_locations,
+    **pubworks_locations,
     **extra_locations,
     **event_locations,
 }

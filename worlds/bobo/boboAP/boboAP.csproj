@@ -40,6 +40,12 @@
     <Reference Include="Sirenix.Serialization">
       <HintPath>$(GameFolder)\BoboBay_Data\Managed\Sirenix.Serialization.dll</HintPath>
     </Reference>
+    <Reference Include="UnityAtoms.UnityAtomsBaseAtoms.Runtime">
+      <HintPath>$(GameFolder)\BoboBay_Data\Managed\UnityAtoms.UnityAtomsBaseAtoms.Runtime.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityAtoms.UnityAtomsCore.Runtime">
+      <HintPath>$(GameFolder)\BoboBay_Data\Managed\UnityAtoms.UnityAtomsCore.Runtime.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

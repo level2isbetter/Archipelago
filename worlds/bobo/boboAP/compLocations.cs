@@ -270,4 +270,70 @@ namespace BoboBayArchipelago
             { "Race_A_SeeTheHero", 20050376 },
         };
     }
+
+    public static class PublicWorksItems
+    {
+        public static readonly Dictionary<long, string> All =
+            new Dictionary<long, string>
+        {
+            { 20050600, "PWP_FixBenches" },
+            { 20050601, "PWP_BasketballHoop" },
+            { 20050602, "PWP_BenchInGarden" },
+            { 20050603, "PWP_BoboCopier" },
+            { 20050604, "PWP_BoboFullStatViewer" },
+            { 20050605, "PWP_Boombox" },
+            { 20050606, "PWP_CampUpgrade" },
+            { 20050607, "PWP_Excursion_Caves" },
+            { 20050608, "PWP_Excursion_DeepForest" },
+            { 20050609, "PWP_GumballMachine" },
+            { 20050610, "PWP_IncreasedCompetitionsPerDay" },
+            { 20050611, "PWP_IncreasedItemStorageInBoat" },
+            { 20050612, "PWP_SoccerBall" },
+            { 20050613, "PWP_StorageShed" },
+            { 20050614, "PWP_ToyBlocks" },
+            { 20050615, "PWP_Excursion_TreeFarm" },
+            { 20050616, "PWP_TV" },
+            { 20050617, "PWP_VendingMachine" },
+            { 20050618, "PWP_SecretGarden" },
+            { 20050619, "PWP_Restaurant" },
+            { 20050620, "PWP_ItemShop" },
+            { 20050621, "PWP_AnimalCrackerShop" },
+            { 20050622, "PWP_CostumeShop" },
+            { 20050623, "PWP_OriginalBoboStatue" },
+            { 20050624, "PWP_SkyGarden" }
+        };
+    }
+
+    public static class PublicWorksLocations
+    {
+        public static readonly Dictionary<string, long> All =
+            new Dictionary<string, long>
+        {
+            { "PWP_FixBenches", 20050700 },
+            { "PWP_BasketballHoop", 20050701 },
+            { "PWP_BenchInGarden", 20050702 },
+            { "PWP_BoboCopier", 20050703 },
+            { "PWP_BoboFullStatViewer", 20050704 },
+            { "PWP_Boombox", 20050705 },
+            { "PWP_CampUpgrade", 20050706 },
+            { "PWP_Excursion_Caves", 20050707 },
+            { "PWP_Excursion_DeepForest", 20050708 },
+            { "PWP_GumballMachine", 20050709 },
+            { "PWP_IncreasedCompetitionsPerDay", 20050710 },
+            { "PWP_IncreasedItemStorageInBoat", 20050711 },
+            { "PWP_SoccerBall", 20050712 },
+            { "PWP_StorageShed", 20050713 },
+            { "PWP_ToyBlocks", 20050714 },
+            { "PWP_Excursion_TreeFarm", 20050715 },
+            { "PWP_TV", 20050716 },
+            { "PWP_VendingMachine", 20050717 },
+            { "PWP_SecretGarden", 20050718 },
+            { "PWP_Restaurant", 20050719 },
+            { "PWP_ItemShop", 20050720 },
+            { "PWP_AnimalCrackerShop", 20050721 },
+            { "PWP_CostumeShop", 20050722 },
+            { "PWP_OriginalBoboStatue", 20050723 },
+            { "PWP_SkyGarden", 20050724 }
+        };
+    }
 }
